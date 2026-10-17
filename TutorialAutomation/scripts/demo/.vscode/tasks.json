@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Compile designated tutorial file",
+      "type": "process",
+      "command": "gcc.exe",
+      "args": ["-std=c11", "-Wall", "-Wextra", "${workspaceFolder}/hello.c", "-o", "${workspaceFolder}/tutorial-demo.exe"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Run designated tutorial program",
+      "type": "process",
+      "command": "${workspaceFolder}/tutorial-demo.exe",
+      "dependsOn": ["Compile designated tutorial file"],
+      "dependsOrder": "sequence",
+      "group": {"kind": "build", "isDefault": true},
+      "presentation": {"reveal": "always", "panel": "dedicated", "clear": true, "focus": false},
+      "problemMatcher": []
+    }
+  ]
+}

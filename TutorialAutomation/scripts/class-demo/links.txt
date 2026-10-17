@@ -1,0 +1,10 @@
+Think Python (Allen Downey, Olin College): https://github.com/AllenDowney/ThinkPython
+Python for Everybody (Charles Severance, University of Michigan): https://github.com/csev/py4e
+CS50 (David Malan, Harvard): https://github.com/cs50
+xv6 teaching OS (MIT 6.1810): https://github.com/mit-pdos/xv6-public
+LLMs from Scratch (Sebastian Raschka): https://github.com/rasbt/LLMs-from-scratch
+Pytudes (Peter Norvig): https://github.com/norvig/pytudes
+micrograd (Andrej Karpathy): https://github.com/karpathy/micrograd
+Python Data Science Handbook (Jake VanderPlas): https://github.com/jakevdp/PythonDataScienceHandbook
+Eloquent JavaScript (Marijn Haverbeke): https://github.com/marijnh/Eloquent-JavaScript
+You Don't Know JS (Kyle Simpson): https://github.com/getify/You-Dont-Know-JS

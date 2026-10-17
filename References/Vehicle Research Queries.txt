@@ -1,0 +1,35 @@
+# Vehicle business research queries for browser visits.
+# One Google search per line. Blank lines and lines starting with # are ignored.
+# Playback searches the query, scrolls the results, then opens one visible
+# organic (non-sponsored) result and reads it. Edit freely; changes apply on the next launch.
+
+# New Zealand
+campervan hire Auckland
+motorhome rental Christchurch prices
+campervan hire Queenstown one way
+best campervan for family New Zealand road trip
+New Zealand freedom camping rules campervan
+campervan relocation deals New Zealand
+
+# Australia
+motorhome hire Sydney
+campervan hire Melbourne to Sydney one way
+motorhome rental Brisbane prices
+campervan hire Cairns to Brisbane
+4WD camper hire Darwin
+campervan relocation deals Australia
+motorhome hire Perth
+
+# Brands and comparisons
+Apollo motorhome reviews
+Apollo vs Britz campervan comparison
+Maui motorhome hire reviews
+Jucy campervan hire review
+Mighty campervans vs Apollo
+Star RV motorhome hire
+
+# Market and pricing
+campervan hire price comparison Australia
+motorhome rental cost per day New Zealand
+campervan hire insurance excess explained
+motorhome hire peak season dates Australia

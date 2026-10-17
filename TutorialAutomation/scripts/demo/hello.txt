@@ -1,0 +1,7 @@
+// A C tutorial example
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello, tutorial!\n");
+    return 0;
+}

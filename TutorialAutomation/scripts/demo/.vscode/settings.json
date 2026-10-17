@@ -1,0 +1,19 @@
+{
+  "editor.autoIndent": "none",
+  "editor.formatOnType": false,
+  "editor.formatOnSave": false,
+  "editor.acceptSuggestionOnEnter": "off",
+  "editor.quickSuggestions": {
+    "comments": "off",
+    "strings": "off",
+    "other": "off"
+},
+  "editor.suggestOnTriggerCharacters": false,
+  "editor.autoClosingBrackets": "never",
+  "editor.autoClosingQuotes": "never",
+  "editor.detectIndentation": false,
+  "editor.insertSpaces": true,
+  "editor.tabSize": 4,
+  "files.autoSave": "off",
+  "task.autoDetect": "off"
+}

@@ -1,0 +1,27 @@
+# PREPARATION REQUIRED: see README. Use the supplied isolated demo folder.
+# Open scripts/demo/TutorialAutomation-Demo.code-workspace, then hello.c.
+# Close other editor tabs and VS Code windows; leave the file empty.
+# Set editor.autoIndent="none", editor.formatOnType=false,
+# editor.formatOnSave=false, editor.acceptSuggestionOnEnter="off",
+# editor.quickSuggestions=false and editor.autoClosingBrackets="never".
+# The specific title prevents activating an unrelated VS Code window.
+ACTIVATE_WINDOW "hello.c - TutorialAutomation-Demo"
+TYPING_PACE 140 300 900 2200 AUTO
+WAIT 1500
+SHORTCUT CTRL HOME
+TYPEFILE "demo/hello.txt"
+WAIT 2000
+# First line is a comment: demonstrate editing it using navigation only.
+SHORTCUT CTRL HOME
+KEY HOME
+SHORTCUT SHIFT END
+TYPE "// A C tutorial: hello, world"
+WAIT 1500
+SHORTCUT CTRL S
+WAIT 2000
+# Run the supplied fixed process tasks: compile hello.c, then run tutorial-demo.exe.
+# gcc.exe must be on VS Code's PATH. Review .vscode/tasks.json before playback.
+SHORTCUT CTRL SHIFT B
+WAIT 4000
+# VS Code's task terminal displays "Hello, tutorial!" for viewers.
+END

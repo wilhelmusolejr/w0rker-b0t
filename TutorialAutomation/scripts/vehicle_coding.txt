@@ -1,0 +1,13 @@
+# The launcher sets a 10-second countdown. Output is typed and saved through VS Code.
+# A fresh filename is generated for each run; the reference itself is never executed.
+# Delay ranges are milliseconds. AUTO chooses and logs a new seed each run.
+# Pause between actions for 1.4-3 seconds; cursor travel takes 1-1.8 seconds.
+ACTION_PACE 1400 3000 1000 1800 AUTO
+# These same delays apply to commands, filenames, paths, and source text.
+TYPING_PACE 140 300 900 2200 AUTO
+# After 160-320 characters, pause 6-14 seconds at the next word/line boundary.
+TYPING_BREAKS 160 320 6000 14000
+# Save, visit the browser for 20 seconds, and return after each 40 lines.
+BROWSER_BREAK 40 "https://docs.python.org/3/tutorial/datastructures.html" 20000 42
+DESKTOP_CODE_REFERENCE "C:/Users/hinatardp/Desktop/Project for vehicle" "../../References/scripts/vehicle-lookup.py"
+END

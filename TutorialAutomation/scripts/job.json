@@ -1,0 +1,71 @@
+{
+    "version": 2,
+    "destination": "C:/Users/hinatardp/Desktop/Project for vehicle",
+    "progress_file": "../../logs/reference-coding.state",
+    "countdown_seconds": 10,
+    "seed": 0,
+
+    "files": {
+        "folder": "../../References/scripts",
+        "include": ["*.cjs", "*.py"],
+        "exclude": [],
+        "order": "shuffle",
+        "shuffle_seed": 0
+    },
+
+    "typing": {
+        "character_ms": [140, 300],
+        "newline_ms": [900, 2200],
+        "pause_every_chars": [160, 320],
+        "pause_ms": [6000, 14000]
+    },
+    "actions": {
+        "pause_ms": [1400, 3000],
+        "mouse_move_ms": [1000, 1800]
+    },
+
+    "browser": {
+        "enabled": true,
+        "launch": "taskbar",
+        "coding_interval_seconds": [300, 600],
+        "visit_seconds": [120, 180],
+        "weights": {
+            "research": 50,
+            "url_list": 25,
+            "python_docs": 15,
+            "js_docs": 10
+        },
+        "url_list_file": "../../References/Apollo Vehicle URLs AU and NZ.txt",
+        "research": {
+            "queries_file": "../../References/Vehicle Research Queries.txt",
+            "results_to_open": [1, 2],
+            "templates": {
+                "patterns": [
+                    "{brand} campervan hire {city}",
+                    "{brand} vs {brand2} motorhome",
+                    "motorhome hire {city} prices"
+                ],
+                "values": {
+                    "brand": ["Apollo", "Britz", "Maui", "Jucy", "Mighty", "Cheapa"],
+                    "city": ["Auckland", "Christchurch", "Queenstown", "Sydney", "Melbourne", "Brisbane", "Cairns", "Perth"]
+                }
+            }
+        },
+        "docs_topics": [
+            { "query": "Python data structures documentation site:docs.python.org", "url": "https://docs.python.org/3/tutorial/datastructures.html" },
+            { "query": "Python functions documentation site:docs.python.org", "url": "https://docs.python.org/3/tutorial/controlflow.html" },
+            { "query": "Python pathlib documentation site:docs.python.org", "url": "https://docs.python.org/3/library/pathlib.html" },
+            { "query": "Python json documentation site:docs.python.org", "url": "https://docs.python.org/3/library/json.html" },
+            { "query": "JavaScript functions documentation MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Functions" },
+            { "query": "JavaScript promises documentation MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises" },
+            { "query": "JavaScript objects documentation MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Working_with_objects" },
+            { "query": "JavaScript arrays documentation MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Indexed_collections" }
+        ]
+    },
+
+    "auto_restart": {
+        "enabled": true,
+        "max_restarts": 5,
+        "wait_seconds": 60
+    }
+}

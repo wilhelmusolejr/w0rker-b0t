@@ -1,0 +1,80 @@
+# Telegram remote control
+
+`monitor.exe` runs next to `tutorial.exe` and connects playback to a Telegram bot. Use it to pause, resume, stop, start, and check playback without touching the playback machine. This is useful when the machine is only being watched through view-only RustDesk.
+
+The monitor never sends desktop input itself. It reads the playback log, takes screenshots on request, and passes `/pause`, `/resume`, and `/stop` to playback through named Windows events.
+
+## One-time setup
+
+1. **Create a bot.** In Telegram, open **@BotFather** (blue checkmark), send `/newbot`, pick a name and a username ending in `bot`, and copy the token it gives you.
+2. **Create `build\notify.json`** next to `monitor.exe`:
+   ```json
+   {
+       "telegram_bot_token": "PASTE_TOKEN_HERE",
+       "telegram_chat_id": "",
+       "heartbeat_minutes": 0,
+       "stall_minutes": 10,
+       "log_folder": "../../logs",
+       "launcher": "../../start-reference-coding.cmd"
+   }
+   ```
+3. **Find your chat id.** Run `monitor.exe` from the `build` folder. With an empty `telegram_chat_id` it starts in setup mode. Open your bot, tap **Start**, and send any message; the bot replies with your chat id.
+4. **Save the chat id.** Stop the monitor with Ctrl+C, put the number in `"telegram_chat_id": "123456789"`, and run `monitor.exe` again. Telegram shows **"Monitor started"**.
+
+| Setting | Meaning |
+|---|---|
+| `telegram_bot_token` | Token from @BotFather. Keep it secret: anyone with it can read the bot's messages and screenshots. If it leaks, send `/revoke` to @BotFather and paste the new token. |
+| `telegram_chat_id` | The only chat allowed to control the monitor. Messages from other chats are ignored and logged. |
+| `heartbeat_minutes` | Periodic status message; `0` = only on request (0-1440). |
+| `stall_minutes` | Alert when the playback log has not changed for this long (2-1440). |
+| `log_folder` | Where playback logs are read and `monitor.log` is written, relative to `notify.json`. |
+| `launcher` | The `.cmd` file that `/run` starts, relative to `notify.json`. It must exist. Use `../../start-class-demo.cmd` for the class demo. |
+
+`build/` is listed in `.gitignore`, so `notify.json` and its token are never committed.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `/status` | Current file, progress, last checkpoint, last browser visit |
+| `/screenshot` | JPEG of the whole desktop with a status caption |
+| `/log` | Status plus the last 25 playback log lines |
+| `/pause` | Same as F8: pauses at the next safe point (after any held key is released) |
+| `/resume` | Continues a paused playback |
+| `/stop` | Same as F9: releases input and stops; no automatic restart |
+| `/run` | Starts the `launcher` from `notify.json` |
+
+Any other message returns the command list.
+
+## Starting playback from Telegram
+
+1. Make sure `monitor.exe` is running on the playback machine. It must be started **before** playback, or `/pause` and `/resume` cannot reach that run.
+2. Leave the desktop unlocked and untouched, with VS Code and Chrome not in the middle of a dialog.
+3. Send **`/run`**. The bot replies "Launcher started", and playback begins after the launcher's 10-second countdown.
+4. After about a minute, send `/screenshot` or `/status` to confirm it is typing.
+
+`/run` refuses to start when playback is already running or when the desktop is locked or disconnected. It starts the launcher in its own console window, exactly like double-clicking the `.cmd`.
+
+To switch what `/run` starts (long reference job vs. class demo), change `launcher` in `notify.json` and restart `monitor.exe`.
+
+### Starting the monitor automatically at sign-in (optional)
+
+Press Win+R, type `shell:startup`, and create a shortcut to `build\monitor.exe` with **Start in** set to the `build` folder. The monitor then starts whenever you sign in, and `/run` is available without opening a terminal.
+
+## Alerts it sends without being asked
+
+- **Playback STOPPED**: a screenshot plus the last log lines, sent once per stop.
+- **Stall**: no log activity for `stall_minutes`.
+- **Heartbeat**: only if `heartbeat_minutes` is above 0.
+
+## Troubleshooting
+
+| Message | Fix |
+|---|---|
+| `telegram_bot_token is missing` | The token was not pasted correctly; it must contain a `:`. |
+| `Telegram ... request failed (error 12002)` | Network timeout. The monitor keeps retrying. If it repeats, the network may be blocking `api.telegram.org`; test with a phone hotspot. |
+| `launcher file was not found` | `launcher` does not point at an existing `.cmd`. |
+| `The monitor is already running.` | Only one monitor runs per sign-in session; use the existing one. |
+| "Playback is running but did not accept remote commands" | Playback was started before the monitor or with an old build. Stop it with F9 and start again. |
+
+Check screen capture locally without sending anything: `monitor.exe --screenshot test.jpg`. The monitor's own log is `logs\monitor.log`.

@@ -1,0 +1,57 @@
+{
+    "version": 2,
+    "destination": "C:/Users/hinatardp/Desktop/Class Demo",
+    "progress_file": "../../logs/class-demo.state",
+    "countdown_seconds": 10,
+    "seed": 0,
+
+    "files": {
+        "folder": "class-demo",
+        "include": ["*.py", "*.cjs"],
+        "list": ["grades.py", "shopping-list.cjs"],
+        "order": "listed"
+    },
+
+    "typing": {
+        "character_ms": [60, 120],
+        "newline_ms": [400, 900],
+        "pause_every_chars": [300, 500],
+        "pause_ms": [2500, 5000]
+    },
+    "actions": {
+        "pause_ms": [800, 1600],
+        "mouse_move_ms": [600, 1200]
+    },
+
+    "browser": {
+        "enabled": true,
+        "launch": "taskbar",
+        "coding_interval_seconds": [90, 150],
+        "visit_seconds": [45, 75],
+        "weights": {
+            "research": 0,
+            "url_list": 40,
+            "python_docs": 30,
+            "js_docs": 30
+        },
+        "url_list_file": "class-demo/links.txt",
+        "docs_topics": [
+            { "query": "Python informal introduction site:docs.python.org", "url": "https://docs.python.org/3/tutorial/introduction.html" },
+            { "query": "Python data structures site:docs.python.org", "url": "https://docs.python.org/3/tutorial/datastructures.html" },
+            { "query": "Python defining functions site:docs.python.org", "url": "https://docs.python.org/3/tutorial/controlflow.html" },
+            { "query": "Python classes tutorial site:docs.python.org", "url": "https://docs.python.org/3/tutorial/classes.html" },
+            { "query": "Python errors and exceptions site:docs.python.org", "url": "https://docs.python.org/3/tutorial/errors.html" },
+            { "query": "JavaScript functions guide MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Functions" },
+            { "query": "JavaScript arrays indexed collections MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Indexed_collections" },
+            { "query": "JavaScript loops and iteration MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Loops_and_iteration" },
+            { "query": "JavaScript using promises MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises" },
+            { "query": "JavaScript using classes MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_classes" }
+        ]
+    },
+
+    "auto_restart": {
+        "enabled": false,
+        "max_restarts": 0,
+        "wait_seconds": 60
+    }
+}

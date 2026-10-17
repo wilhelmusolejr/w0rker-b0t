@@ -1,0 +1,53 @@
+# Open a NEW blank workbook in Excel. English Excel names/shortcuts assumed.
+# Close other Excel windows so the title fragment matches only one window.
+ACTIVATE_WINDOW "Excel"
+TYPING_PACE 140 300 900 2200 AUTO
+WAIT 1000
+# Use Name Box (Ctrl+G) instead of display-specific coordinates.
+SHORTCUT CTRL G
+TYPE "A1"
+KEY ENTER
+TYPE "Tutorial numbers"
+KEY ENTER
+TYPE "10\n20\n30"
+KEY ENTER
+WAIT 1500
+SHORTCUT CTRL G
+TYPE "B1"
+KEY ENTER
+TYPE "Sum"
+KEY TAB
+TYPE "=SUM(A2:A4)"
+KEY ENTER
+WAIT 2000
+SHORTCUT CTRL G
+TYPE "B2"
+KEY ENTER
+TYPE "Average"
+KEY TAB
+TYPE "=AVERAGE(A2:A4)"
+KEY ENTER
+WAIT 2000
+SHORTCUT CTRL G
+TYPE "B3"
+KEY ENTER
+TYPE "First value share"
+KEY TAB
+TYPE "=A2/SUM(A2:A4)"
+KEY ENTER
+SHORTCUT CTRL G
+TYPE "C3"
+KEY ENTER
+SHORTCUT CTRL SHIFT 5
+WAIT 2000
+SHORTCUT CTRL G
+TYPE "A1:C1"
+KEY ENTER
+SHORTCUT CTRL B
+WAIT 1500
+SHORTCUT CTRL G
+TYPE "C1"
+KEY ENTER
+KEY DOWN
+WAIT 2000
+END

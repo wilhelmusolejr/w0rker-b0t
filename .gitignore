@@ -1,0 +1,7 @@
+.tools/
+TutorialAutomation/build/
+TutorialAutomation/logs/*.log
+__pycache__/
+TutorialAutomation/scripts/demo/tutorial-demo.exe
+/logs/
+/.tmp/
