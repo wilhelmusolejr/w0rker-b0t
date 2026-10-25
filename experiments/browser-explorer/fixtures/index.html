@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Accessible browsing fixture</title>
+<style>body {font: 20px system-ui; margin: 32px; max-width: 900px} button,a,input {margin: 8px; padding: 8px} dialog {max-width: 600px}</style>
+<nav aria-label="Site navigation">
+  <button type="button" onclick="location.href='next.html'">Chapters</button>
+  <a href="next.html">Read next chapter</a>
+</nav>
+<main>
+  <h1>Accessible browsing fixture</h1>
+  <button type="button" aria-expanded="false" aria-controls="details" onclick="const show=this.getAttribute('aria-expanded')==='false'; this.setAttribute('aria-expanded',String(show)); document.getElementById('details').hidden=!show">Show details</button>
+  <section id="details" hidden><h2>Expanded information</h2><p>This text appeared without changing the URL.</p><a href="next.html#section">Read expanded section</a></section>
+  <button type="button" onclick="document.getElementById('information').showModal()">Open dialog</button>
+  <dialog id="information" aria-labelledby="dialog-title">
+    <h2 id="dialog-title">Information dialog</h2>
+    <p>This overlay must be handled before the page behind it.</p>
+    <button type="button" onclick="document.getElementById('information').close()">Close dialog</button>
+  </dialog>
+  <form aria-label="Example form" onsubmit="event.preventDefault()">
+    <label>Example field <input name="example"></label>
+    <button type="submit">Open form view</button>
+  </form>
+  <a href="https://outside.example/">Outside website</a>
+  <button type="button">Delete record</button>
+</main>
+</html>
