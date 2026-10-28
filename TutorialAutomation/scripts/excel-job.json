@@ -1,0 +1,31 @@
+{
+    "version": 1,
+    "references": "../../References/excel-simulation",
+    "destination": "../../Excel Playback",
+    "countdown_seconds": 10,
+    "checkpoint_rows": 4,
+    "typing": {
+        "character_ms": [140, 300],
+        "newline_ms": [900, 2200],
+        "pause_every_chars": [160, 320],
+        "pause_ms": [6000, 14000]
+    },
+    "actions": {
+        "pause_ms": [1400, 3000],
+        "mouse_move_ms": [1000, 1800]
+    },
+    "browser": {
+        "enabled": true,
+        "work_interval_seconds": [300, 600],
+        "visit_seconds": [120, 180],
+        "urls": [
+            "https://support.microsoft.com/en-us/excel",
+            "https://support.microsoft.com/en-us/office/overview-of-formulas-in-excel-ecfdc708-9162-49e8-b993-c311f47ca173",
+            "https://support.microsoft.com/en-us/office/sum-function-043e1c7d-7726-4e80-8f32-07b23e057f89",
+            "https://github.com/marketplace/imgbot",
+            "https://github.com/whitphx/vscode-emacs-mcx",
+            "https://github.com/whitphx/streamlit-webrtc",
+            "https://github.com/whitphx/slidev-addon-fancy-arrow"
+        ]
+    }
+}

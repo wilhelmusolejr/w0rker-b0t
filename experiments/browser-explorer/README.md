@@ -1,5 +1,9 @@
 # Ten-minute browser exploration experiment
 
+This UI navigation experiment discovers controls through Windows accessibility,
+selects browsing actions, and logs the resulting page or control changes. Varied
+cursor paths, scroll amounts, and pauses provide configurable playback scenarios.
+
 Double-click **start-browser-test.cmd** and enter the website URL. Press Enter
 to use **https://docs.python.org/3/tutorial/**. The script opens that website in
 a fresh Chrome profile, then explores for **600 seconds**. It accepts HTTP and

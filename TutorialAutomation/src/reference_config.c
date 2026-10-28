@@ -102,10 +102,11 @@ static int load_docs_topics(ReferenceConfig *c, const JsonValue *topics, int req
         const JsonValue *query = json_get(v,L"query"), *url = json_get(v,L"url");
         if (!json_keys(v,topic_keys,2) || !text_value(query) || !text_value(url) ||
             !*query->string || wcslen(query->string) > 150 || wcspbrk(query->string,L"\r\n\t") || !docs_url(url->string)) {
-            *problem = "each browser topic needs a short search query and an official Python or MDN JavaScript URL"; return 0;
+            *problem = "each browser topic needs a short search query and an official Python, MDN JavaScript, or GitHub URL"; return 0;
         }
         c->topics[i].query = _wcsdup(query->string); c->topics[i].url = _wcsdup(url->string);
-        c->topics[i].category = !wcsncmp(url->string,L"https://docs.python.org/",24) ? REFERENCE_PYTHON : REFERENCE_JAVASCRIPT;
+        c->topics[i].category = !wcsncmp(url->string,L"https://docs.python.org/",24) ? REFERENCE_PYTHON :
+            !wcsncmp(url->string,L"https://github.com/",19) ? REFERENCE_GITHUB : REFERENCE_JAVASCRIPT;
         c->topic_count = i+1;
         if (!c->topics[i].query || !c->topics[i].url) return 0;
     }
@@ -115,7 +116,8 @@ static int docs_url(const wchar_t *url) {
     return wcslen(url) < 220 && !wcspbrk(url,L" \"\\\r\n\t") &&
         (!wcsncmp(url,L"https://docs.python.org/3/",wcslen(L"https://docs.python.org/3/")) ||
          !wcsncmp(url,L"https://developer.mozilla.org/en-US/docs/Web/JavaScript/",
-                    wcslen(L"https://developer.mozilla.org/en-US/docs/Web/JavaScript/")));
+                    wcslen(L"https://developer.mozilla.org/en-US/docs/Web/JavaScript/")) ||
+         !wcsncmp(url,L"https://github.com/",wcslen(L"https://github.com/")));
 }
 static int load_url_list(ReferenceConfig *c, char *error, size_t cap) {
     wchar_t *text = NULL, *at;
@@ -200,6 +202,7 @@ const char *reference_category_name(ReferenceCategory category) {
         case REFERENCE_JAVASCRIPT: return "JavaScript documentation";
         case REFERENCE_URL: return "URL list page";
         case REFERENCE_RESEARCH: return "vehicle business research";
+        case REFERENCE_GITHUB: return "GitHub project";
         default: return "unknown";
     }
 }
@@ -422,15 +425,15 @@ static int expand_template(ReferenceConfig *c, const JsonValue *values, const wc
 }
 static int load_job_browser(ReferenceConfig *c, const wchar_t *base, const JsonValue *browser,
                             const char **problem, char *error, size_t cap) {
-    static const wchar_t *const weight_keys[] = {L"research",L"url_list",L"python_docs",L"js_docs"};
-    static const ReferenceCategory weight_categories[] = {REFERENCE_RESEARCH,REFERENCE_URL,REFERENCE_PYTHON,REFERENCE_JAVASCRIPT};
+    static const wchar_t *const weight_keys[] = {L"research",L"url_list",L"python_docs",L"js_docs",L"github"};
+    static const ReferenceCategory weight_categories[] = {REFERENCE_RESEARCH,REFERENCE_URL,REFERENCE_PYTHON,REFERENCE_JAVASCRIPT,REFERENCE_GITHUB};
     static const wchar_t *const research_keys[] = {L"queries_file",L"results_to_open",L"templates"};
     static const wchar_t *const template_keys[] = {L"patterns",L"values"};
     const JsonValue *weights = json_get(browser,L"weights"), *research = json_get(browser,L"research"), *v;
     unsigned i, total = 0;
     if (weights) {
-        if (!json_keys(weights,weight_keys,4)) { *problem = "browser weights allow research, url_list, python_docs, js_docs"; return 0; }
-        for (i = 0; i < 4; ++i) {
+        if (!json_keys(weights,weight_keys,5)) { *problem = "browser weights allow research, url_list, python_docs, js_docs, github"; return 0; }
+        for (i = 0; i < 5; ++i) {
             v = json_get(weights,weight_keys[i]);
             if (v && !uint_value(v,0,1000,&c->weights[weight_categories[i]])) {
                 *problem = "browser weights must be whole numbers from 0 to 1000"; return 0;

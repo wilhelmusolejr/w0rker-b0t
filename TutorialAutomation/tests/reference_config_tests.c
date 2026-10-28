@@ -167,7 +167,9 @@ static void mixed_choice_tests(void) {
         if (choice >= 27) break;
         ++counts[topics[choice].category]; ++seen[choice]; previous = choice;
     }
-    for (i = 0; i < REFERENCE_CATEGORY_COUNT; ++i) CHECK(counts[i] > 6750 && counts[i] < 8250);
+    /* The four categories with topics split evenly; GitHub has none here. */
+    for (i = 0; i < REFERENCE_GITHUB; ++i) CHECK(counts[i] > 6750 && counts[i] < 8250);
+    CHECK(!counts[REFERENCE_GITHUB]);
     for (i = 0; i < 27; ++i) CHECK(seen[i] > 0);
     c.topic_count = 1;
     CHECK(reference_pick_topic(&c,&a,0) == 0);
@@ -274,6 +276,25 @@ static void job_tests(void) {
     CHECK(write_job(job,folder,all_files,L",\"research\":{\"queries_file\":\"queries.txt\",\"results_to_open\":[1,4]}"));
     CHECK(!reference_config_load(job,&c,error,sizeof(error)));
     CHECK(write_job(job,folder,all_files,L",\"weights\":{\"videos\":1}"));
+    CHECK(!reference_config_load(job,&c,error,sizeof(error)));
+
+    /* GitHub project pages are their own weighted coding category. */
+    CHECK(write_job(job,folder,all_files,L",\"weights\":{\"research\":0,\"url_list\":0,\"python_docs\":1,\"js_docs\":0,\"github\":1},"
+        L"\"docs_topics\":[{\"query\":\"Python json docs\",\"url\":\"https://docs.python.org/3/library/json.html\"},"
+        L"{\"query\":\"streamlit-webrtc GitHub\",\"url\":\"https://github.com/whitphx/streamlit-webrtc\"}]"));
+    CHECK(reference_config_load(job,&c,error,sizeof(error)));
+    CHECK(c.topic_count == 2 && c.topics[1].category == REFERENCE_GITHUB && c.weights[REFERENCE_GITHUB] == 1);
+    { CodingSchedule s; unsigned counts[REFERENCE_CATEGORY_COUNT] = {0};
+      coding_schedule_init(&s,300000,600000,120000,180000,11);
+      for (i = 0; i < 20000; ++i) {
+          size_t t = reference_pick_topic(&c,&s,SIZE_MAX);
+          CHECK(t < c.topic_count); if (t >= c.topic_count) break;
+          ++counts[c.topics[t].category];
+      }
+      CHECK(counts[REFERENCE_GITHUB] > 9000 && counts[REFERENCE_GITHUB] < 11000);
+    }
+    reference_config_free(&c);
+    CHECK(write_job(job,folder,all_files,L",\"docs_topics\":[{\"query\":\"x\",\"url\":\"https://gitlab.com/whitphx/streamlit-webrtc\"}]"));
     CHECK(!reference_config_load(job,&c,error,sizeof(error)));
 
     { static const wchar_t *const names[] = {L"b.cjs",L"a.py",L"c.cjs",L"skip-me.cjs",L"notes.txt"};

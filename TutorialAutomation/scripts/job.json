@@ -30,10 +30,11 @@
         "coding_interval_seconds": [300, 600],
         "visit_seconds": [120, 180],
         "weights": {
-            "research": 50,
+            "research": 25,
             "url_list": 25,
-            "python_docs": 15,
-            "js_docs": 10
+            "python_docs": 20,
+            "js_docs": 15,
+            "github": 15
         },
         "url_list_file": "../../References/Apollo Vehicle URLs AU and NZ.txt",
         "research": {
@@ -59,7 +60,11 @@
             { "query": "JavaScript functions documentation MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Functions" },
             { "query": "JavaScript promises documentation MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises" },
             { "query": "JavaScript objects documentation MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Working_with_objects" },
-            { "query": "JavaScript arrays documentation MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Indexed_collections" }
+            { "query": "JavaScript arrays documentation MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Indexed_collections" },
+            { "query": "Imgbot GitHub Marketplace", "url": "https://github.com/marketplace/imgbot" },
+            { "query": "vscode-emacs-mcx GitHub", "url": "https://github.com/whitphx/vscode-emacs-mcx" },
+            { "query": "streamlit-webrtc GitHub", "url": "https://github.com/whitphx/streamlit-webrtc" },
+            { "query": "slidev-addon-fancy-arrow GitHub", "url": "https://github.com/whitphx/slidev-addon-fancy-arrow" }
         ]
     },
 

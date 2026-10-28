@@ -1,5 +1,9 @@
 # Standalone taskbar pointer demo
 
+This UI targeting experiment locates taskbar controls through Windows accessibility
+and demonstrates pointer movement, optional app activation, and showing the desktop.
+Cursor paths and pauses are presentation settings for reviewing the interaction.
+
 This experiment does not import or change the TutorialAutomation player. It uses
 Python's standard library and Windows' built-in PowerShell/.NET accessibility
 support. No pip installs, screenshot processing, AI model, or network connection

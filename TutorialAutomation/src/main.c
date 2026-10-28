@@ -124,20 +124,20 @@ int main(void) {
         printf("Typing %u-%u ms/character, %u-%u ms/line; pauses %u-%u ms every %u-%u characters.\n",
             config.char_ms[0],config.char_ms[1],config.newline_ms[0],config.newline_ms[1],
             config.typing_pause_ms[0],config.typing_pause_ms[1],config.pause_every_chars[0],config.pause_every_chars[1]);
-        printf("Browser %s (%s launch): random Python / JavaScript / URL-list / research pages every %u-%u coding seconds, visits %u-%u seconds.\n",
+        printf("Browser %s (%s launch): random Python / JavaScript / GitHub / URL-list / research pages every %u-%u coding seconds, visits %u-%u seconds.\n",
             config.browser_enabled ? "enabled" : "disabled",
             config.browser_launch == REFERENCE_LAUNCH_TASKBAR ? "taskbar icon" : "Windows Run",config.interval_seconds[0],config.interval_seconds[1],
             config.visit_seconds[0],config.visit_seconds[1]);
         { size_t topic; unsigned counts[REFERENCE_CATEGORY_COUNT] = {0};
           for (topic = 0; topic < config.topic_count; ++topic) ++counts[config.topics[topic].category];
-          printf("Browser choices: %u Python, %u JavaScript, %u URL-list pages, %u research queries.\n",
-              counts[REFERENCE_PYTHON],counts[REFERENCE_JAVASCRIPT],counts[REFERENCE_URL],counts[REFERENCE_RESEARCH]);
+          printf("Browser choices: %u Python, %u JavaScript, %u GitHub, %u URL-list pages, %u research queries.\n",
+              counts[REFERENCE_PYTHON],counts[REFERENCE_JAVASCRIPT],counts[REFERENCE_GITHUB],counts[REFERENCE_URL],counts[REFERENCE_RESEARCH]);
           { unsigned k, total = 0, any = 0, share[REFERENCE_CATEGORY_COUNT] = {0};
             for (k = 0; k < REFERENCE_CATEGORY_COUNT; ++k) if (counts[k]) any |= config.weights[k];
             for (k = 0; k < REFERENCE_CATEGORY_COUNT; ++k) if (counts[k]) total += share[k] = any ? config.weights[k] : 1;
-            if (total) printf("Visit mix: research %u%%, URL list %u%%, Python docs %u%%, JavaScript docs %u%%; research opens %u-%u result(s).\n",
+            if (total) printf("Visit mix: research %u%%, URL list %u%%, Python docs %u%%, JavaScript docs %u%%, GitHub %u%%; research opens %u-%u result(s).\n",
                 share[REFERENCE_RESEARCH]*100/total,share[REFERENCE_URL]*100/total,
-                share[REFERENCE_PYTHON]*100/total,share[REFERENCE_JAVASCRIPT]*100/total,
+                share[REFERENCE_PYTHON]*100/total,share[REFERENCE_JAVASCRIPT]*100/total,share[REFERENCE_GITHUB]*100/total,
                 config.results_to_open[0],config.results_to_open[1]);
           }
         }

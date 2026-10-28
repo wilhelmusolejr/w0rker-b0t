@@ -1,8 +1,14 @@
 # Windows Tutorial Automation
 
-A native C11/Win32 player for prerecorded teaching demonstrations. Scripts drive an active, unlocked Windows desktop using `SendInput` and cursor APIs. All script syntax and external text files are checked before playback. Seeded presentation timing and scrolling make recordings reproducible.
+A native C11/Win32 player for scripted teaching demonstrations and desktop UI interaction tests. Scripts drive an active, unlocked Windows desktop using `SendInput` and cursor APIs. All script syntax and external text files are checked before playback. Configurable timing ranges and seeds control presentation pacing and scrolling; application and network timing can still vary.
+
+See the [project overview](../README.md) for the component map and the distinction between the native player, Python experiments, and proposed integration work.
 
 **More docs:** [CLASS_DEMO.md](CLASS_DEMO.md) (short classroom run) · [TELEGRAM.md](TELEGRAM.md) (remote pause/resume/screenshot/start) · [CHANGELOG.md](CHANGELOG.md) (recent changes)
+
+## Excel reference playback
+
+[EXCEL_DEMO.md](EXCEL_DEMO.md) covers the Excel counterpart to reference coding: **10 ready-to-open `.xlsx` files, 20 worksheets, and 240 fictional company quotes**, based on the comparison workbook in `References`. Run `..\start-reference-excel.cmd` for visible typing in desktop Excel, or add `-DryRun` to validate the generated worksheet scripts without Excel or desktop input. Playback saves separate copies under `Excel Playback` and resumes saved checkpoints. Desktop Excel is required for live playback; it was not installed on the development machine.
 
 ## Job settings: `scripts/job.json`
 
@@ -17,35 +23,35 @@ A native C11/Win32 player for prerecorded teaching demonstrations. Scripts drive
 | | `shuffle_seed` | `0` derives a fixed order from the destination, so resumes keep the same order. Change it to reshuffle. |
 | `browser` | `launch` | `taskbar` (mouse to the pinned Chrome icon) or `run`. |
 | | `coding_interval_seconds`, `visit_seconds` | Coding time between visits and visit length, each a `[min, max]` random range. |
-| | `weights` | Relative chance of `research`, `url_list`, `python_docs`, `js_docs`; `0` turns one off. |
+| | `weights` | Relative chance of `research`, `url_list`, `python_docs`, `js_docs`, `github`; `0` turns one off. The default splits coding sites (Python, JavaScript, GitHub: 20+15+15) and other sites (research, URL list: 25+25) 50/50. |
 | | `url_list_file` | Text file of links; one is picked at random, never the same twice in a row. |
 | | `research.queries_file` | One Google search per line. |
 | | `research.templates` | `patterns` such as `"{brand} campervan hire {city}"`, expanded over every combination in `values`; `{brand2}` uses a different brand than `{brand}`. Up to 400 generated searches. |
 | | `research.results_to_open` | `[1, 2]` reads one or two organic results per visit (max 3). |
-| | `docs_topics` | Python/MDN documentation searches and pages. |
+| | `docs_topics` | Python/MDN documentation and `https://github.com/` project searches and pages. |
 | `auto_restart` | `enabled`, `max_restarts`, `wait_seconds` | After an unexpected stop, waits, re-checks saved files, and resumes. Never restarts after F9, F12, or Ctrl+C. Waits while the desktop is locked. |
 
 Typing and action timing use the same `typing` and `actions` sections described below. Check a job without input: `tutorial.exe --dry-run-config scripts\job.json` prints the file order, visit mix, and number of research searches. The older `reference-coding.json` (version 1) still works with `--config`.
 
-## All reference Python and JavaScript files
+## Legacy reference snapshots (version 1)
 
 From `C:\Users\hinatardp\Desktop\worken`, run:
 
 ```powershell
-.\start-reference-coding.cmd
+.\TutorialAutomation\build\tutorial.exe --config .\TutorialAutomation\scripts\reference-coding.json
 ```
 
-The launcher reads [scripts/reference-coding.json](scripts/reference-coding.json). It contains **45 files: 4 `.py` and 41 `.cjs`**, with their original filenames, exact source snapshots, and SHA-256 checksums. The destination is `C:\Users\hinatardp\Desktop\Project for vehicle`. Source code is entered through the VS Code UI; copied programs are not executed.
+This optional version 1 configuration, [scripts/reference-coding.json](scripts/reference-coding.json), contains **45 files: 4 `.py` and 41 `.cjs`**, with their original filenames, exact source snapshots, and SHA-256 checksums. The destination is `C:\Users\hinatardp\Desktop\Project for vehicle`. Source code is entered through the VS Code UI; copied programs are not executed. The root `start-reference-coding.cmd` launcher instead uses the version 2 `scripts/job.json` described above. The settings and snapshot-regeneration instructions in this section apply to version 1.
 
 After a **10-second countdown**, playback shows the desktop, double-clicks the project folder, types `cmd` in Explorer's address bar, and types **`code .`** in Command Prompt. It verifies the project's Plain Text settings for literal entry and configures them through Settings if needed: indentation is `none`, accepting suggestions on Enter is `off`, and automatic closing brackets, closing quotes, and surrounding selections are `never`. It reads the saved settings back before entering source. This prevents VS Code from adding closing characters to an unfinished reference prefix at a save checkpoint. It creates each file with **Ctrl+N → Save As**, typing its full destination path and original filename into the native dialog. This pins the file to the project root even when Explorer has a subfolder selected. All commands, names, paths, source text, mouse movement, and clicks retain the normal slow presentation profile. The file list runs in JSON order; set an entry's `enabled` to `false` to omit it, or reorder entries.
 
-The defaults are 140–300 ms per character, 900–2,200 ms per newline, 6–14 second pauses after 160–320 characters, 1.4–3 second action pauses, and 1–1.8 second mouse movement. With roughly 415,000 source characters, this is a long run that can span multiple days. There is no faster test profile in the launcher.
+The version 1 defaults are 140–300 ms per character, 900–2,200 ms per newline, 6–14 second pauses after 160–320 characters, 1.4–3 second action pauses, and 1–1.8 second mouse movement. With roughly 415,000 source characters, the complete reference set can span multiple days at these settings. For a shorter example, use the separate [class demo](CLASS_DEMO.md) or [split-window prototype](../experiments/split-coding-browser/README.md).
 
 Before entering editor setup commands, playback waits for the expected VS Code command field, its exact current value, and keyboard focus within the same command widget. It also checks the language and line-ending pickers, then confirms the Plain Text and LF status buttons. An unavailable or unexpected command field stops setup before further text is sent.
 
 After **300–600 seconds of coding**, playback saves and verifies a checkpoint and chooses randomly between **Python documentation, JavaScript documentation, and a page from the URL list**. Each available category has an equal chance; it then chooses a page within that category, avoiding an immediate repeat when alternatives exist. Documentation visits search Google, scroll the results briefly, and open the official page. URL-list visits open the selected link directly. Both scroll with reading pauses and return to the same editor after the **120–180 second visit budget**. Opening the first browser window adds startup time; slow navigation can extend a visit. Later visits reuse that window and use Alt+Tab with a checked fallback to the exact window. The timer counts file creation, source entry, and coding checkpoint pauses; initial project/workspace setup, browser visits, and F8 pauses are excluded. Visits happen at completed-character checkpoints, so an input delay or short save operation can extend the interval slightly.
 
-Documentation topics cover [Python data structures](https://docs.python.org/3/tutorial/datastructures.html), functions, pathlib, and JSON, plus [MDN JavaScript functions](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Functions), promises, objects, and arrays. Search queries and official URLs are editable in the JSON. `browser.url_list_file` points to `../../References/Apollo Vehicle URLs AU and NZ.txt`, which currently adds **19 Apollo links**, including the AU/NZ fleet pages. The player reads that text file on each launch, recognizes inline links such as `Fleet: https://...`, and removes duplicate URLs. Edit the text file to change those choices for the next run; no code-snapshot regeneration is needed. Missing files, lists without HTTP/HTTPS links, malformed links, or links longer than 219 characters stop validation before input. Removing the optional `url_list_file` property keeps documentation-only browsing compatible with earlier configs.
+Documentation topics cover [Python data structures](https://docs.python.org/3/tutorial/datastructures.html), functions, pathlib, and JSON, plus [MDN JavaScript functions](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Functions), promises, objects, and arrays, and four GitHub projects (Imgbot, vscode-emacs-mcx, streamlit-webrtc, slidev-addon-fancy-arrow). Search queries and official URLs are editable in the JSON. `browser.url_list_file` points to `../../References/Apollo Vehicle URLs AU and NZ.txt`, which currently adds **19 Apollo links**, including the AU/NZ fleet pages. The player reads that text file on each launch, recognizes inline links such as `Fleet: https://...`, and removes duplicate URLs. Edit the text file to change those choices for the next run; no code-snapshot regeneration is needed. Missing files, lists without HTTP/HTTPS links, malformed links, or links longer than 219 characters stop validation before input. Removing the optional `url_list_file` property keeps documentation-only browsing compatible with earlier configs.
 
 **Vehicle business research.** `browser.research_file` points to `../../References/Vehicle Research Queries.txt`: one Google search per line (`#` comments allowed), reloaded on each launch. Research is a fourth equal-chance category. A research visit searches Google, scrolls the results for up to 9 seconds, then moves the mouse to one of the first visible organic results and clicks it, and reads that page for the rest of the visit. Results are found through accessibility; Google's own pages, YouTube, and anything under a "Sponsored"/"Ads" label are skipped (best effort). If no suitable result is visible, the visit keeps reading the results page.
 
@@ -76,7 +82,7 @@ Edit the timing ranges under `typing`, `actions`, and `browser` to change the pr
 .\TutorialAutomation\scripts\New-ReferenceCodingConfig.ps1
 ```
 
-Regeneration replaces the config, including custom selections/timing. It does not change references, output files, or progress. The generator scans `.py` and `.cjs` files directly in `References/scripts`; it does not execute them. No additional dependencies are needed beyond the installed native build tools, VS Code, and Chrome/Edge. Keep the RDP desktop unlocked, visible, and free of manual input while playing. **F8 pauses/resumes; F9 or F12 stops.**
+Regeneration replaces the version 1 snapshot config, including custom selections/timing; it does not update version 2 `job.json`. It does not change references, output files, or progress. The generator scans `.py` and `.cjs` files directly in `References/scripts`; it does not execute them. No additional dependencies are needed beyond the installed native build tools, VS Code, and Chrome/Edge. Keep the RDP desktop unlocked, visible, and free of manual input while playing. **F8 pauses/resumes; F9 or F12 stops.**
 
 ## Build
 

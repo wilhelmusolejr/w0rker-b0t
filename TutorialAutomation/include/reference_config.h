@@ -10,7 +10,7 @@ typedef struct {
     int enabled, owned, done;
     size_t offset;
 } ReferenceFile;
-typedef enum { REFERENCE_PYTHON, REFERENCE_JAVASCRIPT, REFERENCE_URL, REFERENCE_RESEARCH, REFERENCE_CATEGORY_COUNT } ReferenceCategory;
+typedef enum { REFERENCE_PYTHON, REFERENCE_JAVASCRIPT, REFERENCE_URL, REFERENCE_RESEARCH, REFERENCE_GITHUB, REFERENCE_CATEGORY_COUNT } ReferenceCategory;
 /* How a new browser window is opened: Windows Run, or the pinned taskbar icon via the mouse. */
 typedef enum { REFERENCE_LAUNCH_RUN, REFERENCE_LAUNCH_TASKBAR } ReferenceLaunch;
 typedef struct { wchar_t *query, *url; ReferenceCategory category; } ReferenceTopic;

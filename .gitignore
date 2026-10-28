@@ -5,3 +5,4 @@ __pycache__/
 TutorialAutomation/scripts/demo/tutorial-demo.exe
 /logs/
 /.tmp/
+/Excel Playback/
