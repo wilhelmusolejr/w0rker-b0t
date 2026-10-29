@@ -1,0 +1,24 @@
+{
+    "version": 1,
+    "chance_percent": 20,
+    "check_every_minutes": [8, 15],
+    "minutes": [10, 20],
+    "leave_open_percent": 20,
+    "apps": {
+        "notepad": 30,
+        "explorer": 30,
+        "calculator": 15,
+        "images": 25
+    },
+    "notes_folder": "Documents\\Notes",
+    "folders": ["Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos", "Projects"],
+    "image_folders": ["Pictures", "Projects"],
+    "notes": [
+        "To do today:\n- finish the current feature\n- read more about {interest}\n- reply to messages\n",
+        "Ideas for the weekend\n{hobby}\nmaybe look into {interest} again\n",
+        "Notes on {interest}:\nstart small, practise every day, write down what works.\n",
+        "Shopping list\n- coffee\n- bread\n- eggs\n- something for {hobby}\n",
+        "Reminder: back up the project folder before the next change.\nCheck {interest} articles later.\n",
+        "Things I learned this week\n1. keep functions short\n2. {interest} takes patience\n3. take breaks\n"
+    ]
+}

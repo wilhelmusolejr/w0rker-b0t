@@ -1,0 +1,22 @@
+{
+    "version": 1,
+    "target_minutes": [615, 645],
+    "coding_minutes": [40, 80],
+    "browsing_minutes": [10, 20],
+    "break_minutes": [5, 20],
+    "first_task_coding_percent": 80,
+    "loggy_minimize_percent": 60,
+    "start_app_close_percent": 50,
+    "ending_reserve_seconds": 75,
+    "check_seconds": 15,
+    "restart_wait_seconds": 120,
+    "weight_jitter_percent": 20,
+    "idle_percent": 5,
+    "idle_minutes": [1, 6],
+    "idle_check_minutes": [20, 40],
+    "start_looks": {"desktop": 25, "vscode": 35, "browser": 20, "app": 20},
+    "end_looks": {"direct": 35, "close_all": 30, "close_some": 35},
+    "close_methods": {"button": 40, "alt_f4": 35, "taskbar": 25},
+    "after_stop": {"front": 40, "minimize": 40, "close": 20},
+    "browser_after": {"minimize": 50, "close": 20, "leave": 30}
+}

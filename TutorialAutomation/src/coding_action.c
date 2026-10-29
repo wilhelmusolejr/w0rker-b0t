@@ -520,7 +520,9 @@ int coding_desktop_reference(Playback *p, const wchar_t *directory, const wchar_
 
 static int select_file_tab(Playback *p, const wchar_t *name) {
     RECT tab;
-    return ui_control_rect(p,UIA_TabItemControlTypeId,name,1,&tab) && presentation_click(p,&tab,0) &&
+    if (!ui_find_control_rect(p,UIA_TabItemControlTypeId,name,&tab) && !ui_control_rect(p,UIA_TabItemControlTypeId,name,1,&tab))
+        return 0;
+    return presentation_click(p,&tab,0) &&
         presentation_rest(p,"reference file selected") && shortcut(p,VK_CONTROL,L'1');
 }
 int coding_workspace_pacing_ready(const wchar_t *text) {
@@ -573,10 +575,14 @@ static int create_reference_file(Playback *p, const wchar_t *output) {
     WORD save_as[] = {VK_CONTROL,VK_SHIFT,L'S'};
     HWND editor = p->target, dialog;
     const wchar_t *name = wcsrchr(output,L'\\')+1;
+    wchar_t quoted[MAX_PATH + 3];
     int attempt, matches = 0;
     if (GetFileAttributesW(output) != INVALID_FILE_ATTRIBUTES) {
         playback_log(p,"output filename exists; refusing to overwrite"); return 0;
     }
+    /* Quoted, the name is saved exactly as typed. Unquoted, Windows appends ".txt" to names it
+       does not recognize as having an extension, such as ".env copy" or "Dockerfile". */
+    swprintf(quoted,MAX_PATH + 3,L"\"%ls\"",output);
     playback_log(p,"creating an untitled file and saving it to the exact configured path");
     if (!keyboard_press(p,VK_ESCAPE) || !shortcut(p,VK_CONTROL,L'N') ||
         !presentation_rest(p,"new untitled editor ready") || !keyboard_shortcut(p,save_as,3) ||
@@ -589,9 +595,9 @@ static int create_reference_file(Playback *p, const wchar_t *output) {
     /* A character lost while typing (once, the ':' after the drive letter) makes Windows report
        "Path does not exist" and leaves modal dialogs that block VS Code. Check before pressing Enter. */
     for (attempt = 0; attempt < 2 && matches != 1; ++attempt) {
-        if (!shortcut(p,VK_CONTROL,L'A') || !keyboard_type(p,output) ||
+        if (!shortcut(p,VK_CONTROL,L'A') || !keyboard_type(p,quoted) ||
             !presentation_rest(p,"exact destination and original filename entered")) return 0;
-        matches = save_as_name_is(p,dialog,output);
+        matches = save_as_name_is(p,dialog,quoted);
         if (matches < 0) { playback_log(p,"Save As filename could not be read back; not verified"); break; }
     }
     if (!matches) {
@@ -808,4 +814,44 @@ int coding_reference_batch(Playback *p) {
         if (!shortcut(p,VK_CONTROL,L'W') || !presentation_rest(p,"completed reference tab closed")) return 0;
     }
     playback_log(p,"all enabled reference files completed and verified"); return 1;
+}
+
+/* ---------- steps shared with the project typer (coding_steps.h) ---------- */
+int coding_step_show_desktop(Playback *p) { return show_desktop(p); }
+int coding_step_wait_window(Playback *p, const wchar_t *class_name, const wchar_t *process,
+                            const wchar_t *title, HWND exact) {
+    return wait_window(p, class_name, process, title, exact);
+}
+int coding_step_win_key(Playback *p, WORD key) { return desktop_shortcut(p, key); }
+/* From the focused Explorer window: click its address bar, type cmd, and wait for the new console. */
+int coding_step_console_here(Playback *p) {
+    RECT rect;
+    ConsoleWindows consoles = {0};
+    EnumWindows(find_console, (LPARAM)&consoles);
+    if (consoles.overflow) { playback_log(p, "too many console windows to identify a new one"); return 0; }
+    return ui_control_rect(p, UIA_EditControlTypeId, L"Address Bar", 0, &rect) &&
+        presentation_click(p, &rect, 0) && shortcut(p, VK_CONTROL, L'L') &&
+        presentation_rest(p, "address bar selected") && keyboard_type(p, L"cmd") &&
+        presentation_rest(p, "Command Prompt command entered") && keyboard_press(p, VK_RETURN) &&
+        wait_console(p, &consoles) && presentation_rest(p, "Command Prompt is open in the project folder");
+}
+int coding_step_workspace(Playback *p, const wchar_t *directory) {
+    if (workspace_plaintext_ready(directory)) { playback_log(p, "verified existing Plain Text workspace settings"); return 1; }
+    if (!prepare_workspace_indentation(p)) return 0;
+    if (workspace_plaintext_ready(directory)) return 1;
+    playback_log(p, "workspace settings did not disable automatic text insertion; stopped before entering source code");
+    return 0;
+}
+int coding_step_create_file(Playback *p, const wchar_t *path) { return create_reference_file(p, path); }
+int coding_step_open_file(Playback *p, const wchar_t *path, HWND editor) { return open_existing_reference(p, path, editor); }
+int coding_step_select_tab(Playback *p, const wchar_t *name) { return select_file_tab(p, name); }
+int coding_step_plain_text(Playback *p) { return select_plain_text(p); }
+int coding_step_lf(Playback *p) { return select_lf(p); }
+int coding_step_revert(Playback *p) { return vscode_revert_file(p); }
+int coding_step_wait_saved(Playback *p, const wchar_t *path, const wchar_t *expected) {
+    return wait_saved_text(p, path, expected);
+}
+int coding_step_saved_offset(Playback *p, const wchar_t *path, const wchar_t *expected,
+                             const size_t *required, size_t *offset) {
+    return reference_saved_offset(p, path, expected, required, offset);
 }

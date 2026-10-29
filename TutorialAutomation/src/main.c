@@ -3,9 +3,20 @@
 #include "window_manager.h"
 #include "reference_config.h"
 #include "playback_controls.h"
+#include "profile.h"
+#include "browse_catalog.h"
+#include "browser_session.h"
+#include "project_action.h"
+#include "project_manifest.h"
+#include "side_apps.h"
+#include "loggy3.h"
+#include "work_session.h"
 #include <shellapi.h>
 #include <stdlib.h>
 #include <wchar.h>
+#include <limits.h>
+#include <string.h>
+#include <stdint.h>
 
 static Playback *active;
 static volatile LONG console_stop;
@@ -37,6 +48,18 @@ static void usage(void) {
          "tutorial --dry-run FILE [--log FILE]\n"
          "tutorial --config FILE.json [--countdown SECONDS] [--log FILE]\n"
          "tutorial --validate-config FILE.json | --dry-run-config FILE.json\n"
+         "tutorial --browse PROFILE_ID | --dry-run-browse PROFILE_ID [--minutes N] [--seed N]\n"
+         "         [--profiles FILE.json] [--browsing FILE.json] [--launch taskbar|run] [--countdown SECONDS] [--log FILE]\n"
+         "tutorial --code PROFILE_ID | --dry-run-code PROFILE_ID [--seed N] [--profiles FILE.json]\n"
+         "         [--programming FILE.json] [--countdown SECONDS] [--log FILE]\n"
+         "tutorial --fetch-projects [--programming FILE.json]   (clone every listed project at its pinned commit)\n"
+         "tutorial --apps PROFILE_ID [--app notepad|explorer|calculator|images] [--minutes N] [--seed N]\n"
+         "tutorial --session PROFILE_ID | --dry-run-session PROFILE_ID [--seed N] [--countdown SECONDS] [--log FILE]\n"
+         "         [--target-minutes N] [--coding-minutes N] [--browsing-minutes N]   (fixed values, for short test days)\n"
+         "         (a whole recorded day: Loggy3 Start, coding and browsing until today's target, then Stop)\n"
+         "tutorial --loggy3 status|show|minimize|close|record|stop|demo [--dry-run] [--hover-only] [--hover-seconds N]\n"
+         "         [--hold SECONDS] [--minimize-after] [--profile ID] [--profiles FILE.json] [--countdown SECONDS] [--log FILE]\n"
+         "--browse and --code take side-app breaks from profiles\\apps.json; --no-side-apps turns them off.\n"
          "F8 pause/resume | F9 stop | F12 emergency stop\n"
          "Scripts, JSON configs, and sources must be UTF-8.");
 }
@@ -49,6 +72,476 @@ static FILE *execution_log(const wchar_t *path) {
         now.wYear,now.wMonth,now.wDay,now.wHour,now.wMinute,now.wSecond,GetCurrentProcessId());
     return _wfopen(generated,L"ab");
 }
+/* profiles/ sits next to build/ (MinGW) or two levels above build-msvc/Release/ (MSVC). */
+static int default_profile_file(const wchar_t *name, wchar_t out[MAX_PATH]) {
+    wchar_t exe[MAX_PATH], *slash;
+    unsigned up;
+    if (!GetModuleFileNameW(NULL, exe, MAX_PATH)) return 0;
+    for (up = 0; up < 3; ++up) {
+        DWORD attrs;
+        if (!(slash = wcsrchr(exe, L'\\'))) return 0;
+        *slash = 0;
+        if (swprintf(out, MAX_PATH, L"%ls\\profiles\\%ls", exe, name) < 0) return 0;
+        attrs = GetFileAttributesW(out);
+        if (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY)) return 1;
+    }
+    return 0;
+}
+static int number_argument(wchar_t **argv, int argc, int *i, unsigned long low, unsigned long high, unsigned long *out) {
+    wchar_t *end;
+    if (++*i >= argc || !*argv[*i] || argv[*i][0] == L'-') return 0;
+    *out = wcstoul(argv[*i], &end, 10);
+    return !*end && *out >= low && *out <= high;
+}
+/* profiles/apps.json, when present and not turned off: side-app breaks during the main task. */
+static const SideAppsConfig *load_side_apps(int disabled, SideAppsConfig *config) {
+    wchar_t path[MAX_PATH];
+    char error[256];
+    if (disabled) { puts("Side-app breaks: off (--no-side-apps)."); return NULL; }
+    if (!default_profile_file(L"apps.json", path)) { puts("Side-app breaks: off (profiles\\apps.json not found)."); return NULL; }
+    if (!side_apps_load(path, config, error, sizeof(error))) { fprintf(stderr, "apps.json: %s; side-app breaks are off\n", error); return NULL; }
+    printf("Side-app breaks: %u%% chance every %u-%u minutes of the main task, %u-%u minutes each "
+        "(Notepad %u, File Explorer %u, Calculator %u, images %u).\n", config->chance_percent, config->check_minutes[0],
+        config->check_minutes[1], config->minutes[0], config->minutes[1], config->weights[APP_NOTEPAD],
+        config->weights[APP_EXPLORER], config->weights[APP_CALCULATOR], config->weights[APP_IMAGES]);
+    return config;
+}
+static int browse_main(wchar_t **argv, int argc) {
+    const wchar_t *profiles_path = NULL, *browsing_path = NULL, *log_path = NULL;
+    wchar_t profiles_default[MAX_PATH], browsing_default[MAX_PATH];
+    unsigned long profile_id = 0, minutes = 10, seed = 0, countdown = 10, value;
+    int i, dry = 0, taskbar = 1, ok, exit_code = 2;
+    ProfileSet profiles = {0};
+    BrowseCatalog catalog = {0};
+    BrowseSession session = {0};
+    SideAppsConfig side_apps;
+    int no_side_apps = 0;
+    Script script = {0};
+    Playback p = {0};
+    char error[512];
+    for (i = 1; i < argc; ++i) {
+        if (!wcscmp(argv[i], L"--browse") || !wcscmp(argv[i], L"--dry-run-browse")) {
+            dry = !wcscmp(argv[i], L"--dry-run-browse");
+            if (profile_id || !number_argument(argv, argc, &i, 1, UINT_MAX, &profile_id)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--minutes")) {
+            if (!number_argument(argv, argc, &i, 1, 480, &minutes)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--seed")) {
+            if (!number_argument(argv, argc, &i, 0, INT32_MAX, &seed)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--countdown")) {
+            if (!number_argument(argv, argc, &i, 0, 3600, &countdown)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--profiles") && i+1 < argc && !profiles_path) profiles_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--browsing") && i+1 < argc && !browsing_path) browsing_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--log") && i+1 < argc && !log_path) log_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--no-side-apps")) no_side_apps = 1;
+        else if (!wcscmp(argv[i], L"--launch") && i+1 < argc) {
+            ++i;
+            if (!wcscmp(argv[i], L"taskbar")) taskbar = 1;
+            else if (!wcscmp(argv[i], L"run")) taskbar = 0;
+            else goto invalid;
+        } else goto invalid;
+    }
+    if (!profiles_path) {
+        if (!default_profile_file(L"profiles.json", profiles_default)) { fputs("profiles\\profiles.json not found; use --profiles\n", stderr); return 2; }
+        profiles_path = profiles_default;
+    }
+    if (!browsing_path) {
+        if (!default_profile_file(L"browsing.json", browsing_default)) { fputs("profiles\\browsing.json not found; use --browsing\n", stderr); return 2; }
+        browsing_path = browsing_default;
+    }
+    if (!profile_load(profiles_path, &profiles, error, sizeof(error))) { fprintf(stderr, "profiles: %s\n", error); goto finish; }
+    if (!browse_catalog_load(browsing_path, &catalog, error, sizeof(error))) { fprintf(stderr, "browsing: %s\n", error); goto finish; }
+    session.profile = profile_find(&profiles, (unsigned)profile_id);
+    if (!session.profile) { fprintf(stderr, "no profile with id %lu\n", profile_id); goto finish; }
+    session.catalog = &catalog;
+    session.duration_ms = (DWORD)(minutes * 60000);
+    session.seed = seed ? (uint32_t)seed : action_recording_seed();
+    session.via_taskbar = taskbar;
+    memset(&side_apps, 0, sizeof(side_apps));
+    session.side_apps = load_side_apps(no_side_apps, &side_apps);
+    if (dry) {
+        BrowsePlan plan;
+        browser_session_plan(&session, &plan);
+        browser_session_print_plan(&session, &plan);
+        puts("Dry-run complete; no input generated. Repeat with --seed to open the same tabs live.");
+        exit_code = 0; goto finish;
+    }
+    script.commands = calloc(1, sizeof(*script.commands));
+    if (!script.commands) goto finish;
+    script.count = 1; script.commands[0].kind = CMD_BROWSE_SESSION; script.commands[0].line = 1;
+    p.browse_session = &session;
+    p.log = execution_log(log_path);
+    if (!p.log) { fputs("Cannot open execution log. Use --log with a writable path.\n", stderr); goto finish; }
+    window_enable_dpi();
+    active = &p; SetConsoleCtrlHandler(console_control, TRUE);
+    SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+    if (!playback_remote_open()) playback_log(&p, "remote control events unavailable; Telegram /pause /resume /stop will not work");
+    ok = playback_run(&p, &script, (DWORD)countdown * 1000);
+    SetConsoleCtrlHandler(console_control, FALSE); active = NULL;
+    playback_remote_close(); SetThreadExecutionState(ES_CONTINUOUS);
+    exit_code = ok ? 0 : 1;
+    goto finish;
+invalid:
+    usage();
+finish:
+    if (p.log) fclose(p.log);
+    script_free(&script); browse_catalog_free(&catalog); profile_free(&profiles);
+    if (session.side_apps) side_apps_free(&side_apps);
+    return exit_code;
+}
+static int code_main(wchar_t **argv, int argc) {
+    const wchar_t *profiles_path = NULL, *programming_path = NULL, *log_path = NULL;
+    wchar_t profiles_default[MAX_PATH], programming_default[MAX_PATH], destination[MAX_PATH];
+    ProjectManifest manifest = {0};
+    unsigned long profile_id = 0, seed = 0, countdown = 10;
+    int i, dry = 0, ok, exit_code = 2;
+    ProfileSet profiles = {0};
+    ProgrammingConfig config;
+    ProjectHistory history = {0};
+    ProjectReference reference = {0};
+    ProjectPlan plan = {0};
+    CodingProject job = {0};
+    SideAppsConfig side_apps;
+    int no_side_apps = 0;
+    HistoryProject *started = NULL;
+    Script script = {0};
+    Playback p = {0};
+    char error[512];
+    memset(&config, 0, sizeof(config));
+    for (i = 1; i < argc; ++i) {
+        if (!wcscmp(argv[i], L"--code") || !wcscmp(argv[i], L"--dry-run-code")) {
+            dry = !wcscmp(argv[i], L"--dry-run-code");
+            if (profile_id || !number_argument(argv, argc, &i, 1, UINT_MAX, &profile_id)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--seed")) {
+            if (!number_argument(argv, argc, &i, 0, INT32_MAX, &seed)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--countdown")) {
+            if (!number_argument(argv, argc, &i, 0, 3600, &countdown)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--profiles") && i+1 < argc && !profiles_path) profiles_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--programming") && i+1 < argc && !programming_path) programming_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--log") && i+1 < argc && !log_path) log_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--no-side-apps")) no_side_apps = 1;
+        else goto invalid;
+    }
+    memset(&side_apps, 0, sizeof(side_apps));
+    if (!profiles_path) {
+        if (!default_profile_file(L"profiles.json", profiles_default)) { fputs("profiles\\profiles.json not found; use --profiles\n", stderr); return 2; }
+        profiles_path = profiles_default;
+    }
+    if (!programming_path) {
+        if (!default_profile_file(L"programming.json", programming_default)) { fputs("profiles\\programming.json not found; use --programming\n", stderr); return 2; }
+        programming_path = programming_default;
+    }
+    if (!profile_load(profiles_path, &profiles, error, sizeof(error))) { fprintf(stderr, "profiles: %s\n", error); goto finish; }
+    if (!programming_config_load(programming_path, &config, error, sizeof(error))) { fprintf(stderr, "programming: %s\n", error); goto finish; }
+    job.profile = profile_find(&profiles, (unsigned)profile_id);
+    if (!job.profile) { fprintf(stderr, "no profile with id %lu\n", profile_id); goto finish; }
+    if (job.profile->main_task != PROFILE_TASK_PROGRAMMING || !job.profile->project_path) {
+        fputs("this profile's main task is not programming, or it has no project_path\n", stderr); goto finish;
+    }
+    if (!project_history_load(&config, job.profile, &history, error, sizeof(error))) { fprintf(stderr, "history: %s\n", error); goto finish; }
+    if (!project_manifest_load(config.project_list, &manifest, error, sizeof(error))) { fprintf(stderr, "projects: %s\n", error); goto finish; }
+    /* A new project gets its history entry now (live runs only); it is written once the folder exists. */
+    if (!project_select(&config, &manifest, job.profile, &history, !dry, &reference, &started, destination, error, sizeof(error))) {
+        printf("%s\n", error); exit_code = strstr(error, "completed or skipped") ? 0 : 2; goto finish;
+    }
+    if (!project_plan_build(&reference, started, destination, &plan, error, sizeof(error))) { fprintf(stderr, "%s\n", error); goto finish; }
+    job.config = &config; job.history = &history; job.reference = &reference; job.plan = &plan;
+    job.seed = seed ? (uint32_t)seed : action_recording_seed();
+    job.side_apps = load_side_apps(no_side_apps, &side_apps);
+    coding_project_print(&job);
+    if (plan.conflicts) { puts("Resolve the conflicts above (or move that folder away) and run again; no input was sent."); goto finish; }
+    if (dry) { puts("Dry-run complete; no input generated and no files written."); exit_code = 0; goto finish; }
+    script.commands = calloc(1, sizeof(*script.commands));
+    if (!script.commands) goto finish;
+    script.count = 1; script.commands[0].kind = CMD_CODE_PROJECT; script.commands[0].line = 1;
+    p.coding_project = &job;
+    p.log = execution_log(log_path);
+    if (!p.log) { fputs("Cannot open execution log. Use --log with a writable path.\n", stderr); goto finish; }
+    window_enable_dpi();
+    active = &p; SetConsoleCtrlHandler(console_control, TRUE);
+    SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+    if (!playback_remote_open()) playback_log(&p, "remote control events unavailable; Telegram /pause /resume /stop will not work");
+    ok = playback_run(&p, &script, (DWORD)countdown * 1000);
+    SetConsoleCtrlHandler(console_control, FALSE); active = NULL;
+    playback_remote_close(); SetThreadExecutionState(ES_CONTINUOUS);
+    exit_code = ok ? 0 : 1;
+    goto finish;
+invalid:
+    usage();
+finish:
+    if (p.log) fclose(p.log);
+    script_free(&script); project_plan_free(&plan); project_reference_free(&reference);
+    project_history_free(&history); programming_config_free(&config); profile_free(&profiles);
+    project_manifest_free(&manifest);
+    if (job.side_apps) side_apps_free(&side_apps);
+    return exit_code;
+}
+/* One side-app break on its own, to try an app out: --apps PROFILE_ID [--app NAME] [--minutes N]. */
+static int apps_main(wchar_t **argv, int argc) {
+    const wchar_t *profiles_path = NULL, *log_path = NULL;
+    wchar_t profiles_default[MAX_PATH], apps_path[MAX_PATH];
+    unsigned long profile_id = 0, minutes = 0, seed = 0, countdown = 10;
+    int i, picked = 0, ok, exit_code = 2;
+    ProfileSet profiles = {0};
+    SideAppsConfig config;
+    SideAppJob job;
+    Script script = {0};
+    Playback p = {0};
+    MotionRng rng;
+    char error[512];
+    memset(&config, 0, sizeof(config)); memset(&job, 0, sizeof(job));
+    for (i = 1; i < argc; ++i) {
+        if (!wcscmp(argv[i], L"--apps")) {
+            if (profile_id || !number_argument(argv, argc, &i, 1, UINT_MAX, &profile_id)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--app") && i+1 < argc) {
+            if (!side_app_from_name(argv[++i], &job.app)) { fputs("--app is notepad, explorer, calculator, or images\n", stderr); return 2; }
+            picked = 1;
+        } else if (!wcscmp(argv[i], L"--minutes")) {
+            if (!number_argument(argv, argc, &i, 1, 240, &minutes)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--seed")) {
+            if (!number_argument(argv, argc, &i, 0, INT32_MAX, &seed)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--countdown")) {
+            if (!number_argument(argv, argc, &i, 0, 3600, &countdown)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--profiles") && i+1 < argc && !profiles_path) profiles_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--log") && i+1 < argc && !log_path) log_path = argv[++i];
+        else goto invalid;
+    }
+    if (!profiles_path) {
+        if (!default_profile_file(L"profiles.json", profiles_default)) { fputs("profiles\\profiles.json not found; use --profiles\n", stderr); return 2; }
+        profiles_path = profiles_default;
+    }
+    if (!default_profile_file(L"apps.json", apps_path)) { fputs("profiles\\apps.json not found\n", stderr); return 2; }
+    if (!profile_load(profiles_path, &profiles, error, sizeof(error))) { fprintf(stderr, "profiles: %s\n", error); goto finish; }
+    if (!side_apps_load(apps_path, &config, error, sizeof(error))) { fprintf(stderr, "apps.json: %s\n", error); goto finish; }
+    if (!(job.profile = profile_find(&profiles, (unsigned)profile_id))) { fprintf(stderr, "no profile with id %lu\n", profile_id); goto finish; }
+    job.config = &config;
+    job.seed = seed ? (uint32_t)seed : action_recording_seed();
+    motion_seed(&rng, job.seed);
+    if (!picked) job.app = side_apps_pick(&config, &rng);
+    job.duration_ms = (DWORD)(minutes ? minutes : motion_between(&rng, config.minutes[0], config.minutes[1])) * 60000;
+    printf("Side-app break: %s for %lu minute(s), seed %lu.\n", side_app_name(job.app), job.duration_ms / 60000, (unsigned long)job.seed);
+    script.commands = calloc(1, sizeof(*script.commands));
+    if (!script.commands) goto finish;
+    script.count = 1; script.commands[0].kind = CMD_SIDE_APP; script.commands[0].line = 1;
+    p.side_app_job = &job;
+    p.log = execution_log(log_path);
+    if (!p.log) { fputs("Cannot open execution log. Use --log with a writable path.\n", stderr); goto finish; }
+    window_enable_dpi();
+    active = &p; SetConsoleCtrlHandler(console_control, TRUE);
+    SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+    if (!playback_remote_open()) playback_log(&p, "remote control events unavailable; Telegram /pause /resume /stop will not work");
+    ok = playback_run(&p, &script, (DWORD)countdown * 1000);
+    SetConsoleCtrlHandler(console_control, FALSE); active = NULL;
+    playback_remote_close(); SetThreadExecutionState(ES_CONTINUOUS);
+    exit_code = ok ? 0 : 1;
+    goto finish;
+invalid:
+    usage();
+finish:
+    if (p.log) fclose(p.log);
+    script_free(&script); side_apps_free(&config); profile_free(&profiles);
+    return exit_code;
+}
+/* Loggy3 window and recording actions: --loggy3 ACTION. status reads only (no countdown, no input). */
+static int loggy_main(wchar_t **argv, int argc) {
+    const wchar_t *profiles_path = NULL, *log_path = NULL;
+    wchar_t profiles_default[MAX_PATH];
+    unsigned long profile_id = 1, seed = 0, countdown = 3, hold = 5, hover = 5;
+    int i, ok, exit_code = 2, has_action = 0, countdown_set = 0;
+    ProfileSet profiles = {0};
+    LoggyJob job;
+    Script script = {0};
+    Playback p = {0};
+    char error[512];
+    memset(&job, 0, sizeof(job));
+    for (i = 1; i < argc; ++i) {
+        if (!wcscmp(argv[i], L"--loggy3") && i+1 < argc && !has_action) {
+            if (!loggy_action_from_name(argv[++i], &job.action)) { fputs("--loggy3 is status, show, minimize, close, record, stop, or demo\n", stderr); return 2; }
+            has_action = 1;
+        } else if (!wcscmp(argv[i], L"--dry-run")) job.dry_run = 1;
+        else if (!wcscmp(argv[i], L"--hover-only")) job.hover_only = 1;
+        else if (!wcscmp(argv[i], L"--minimize-after")) job.minimize_after = 1;
+        else if (!wcscmp(argv[i], L"--hover-seconds")) { if (!number_argument(argv, argc, &i, 0, 60, &hover)) goto invalid; }
+        else if (!wcscmp(argv[i], L"--hold")) { if (!number_argument(argv, argc, &i, 0, 300, &hold)) goto invalid; }
+        else if (!wcscmp(argv[i], L"--profile")) { if (!number_argument(argv, argc, &i, 1, UINT_MAX, &profile_id)) goto invalid; }
+        else if (!wcscmp(argv[i], L"--seed")) { if (!number_argument(argv, argc, &i, 0, INT32_MAX, &seed)) goto invalid; }
+        else if (!wcscmp(argv[i], L"--countdown")) { if (!number_argument(argv, argc, &i, 0, 3600, &countdown)) goto invalid; countdown_set = 1; }
+        else if (!wcscmp(argv[i], L"--profiles") && i+1 < argc && !profiles_path) profiles_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--log") && i+1 < argc && !log_path) log_path = argv[++i];
+        else goto invalid;
+    }
+    if (!has_action) goto invalid;
+    if (job.hover_only && job.action != LOGGY_RECORD && job.action != LOGGY_STOP) { fputs("--hover-only goes with record or stop\n", stderr); return 2; }
+    /* Reading the state sends no input, so it starts at once. */
+    if (!countdown_set && (job.action == LOGGY_STATUS || job.dry_run)) countdown = 0;
+    if (!profiles_path) {
+        if (!default_profile_file(L"profiles.json", profiles_default)) { fputs("profiles\\profiles.json not found; use --profiles\n", stderr); return 2; }
+        profiles_path = profiles_default;
+    }
+    if (!profile_load(profiles_path, &profiles, error, sizeof(error))) { fprintf(stderr, "profiles: %s\n", error); goto finish; }
+    if (!(job.profile = profile_find(&profiles, (unsigned)profile_id))) { fprintf(stderr, "no profile with id %lu\n", profile_id); goto finish; }
+    job.seed = seed ? (uint32_t)seed : action_recording_seed();
+    job.hold_ms = (DWORD)hold * 1000; job.hover_ms = (DWORD)hover * 1000;
+    printf("Loggy3 %s%s%s, profile %lu's mouse hand, seed %lu.\n", loggy_action_name(job.action), job.dry_run ? " (dry run)" : "",
+        job.hover_only ? " (hover only)" : "", profile_id, (unsigned long)job.seed);
+    script.commands = calloc(1, sizeof(*script.commands));
+    if (!script.commands) goto finish;
+    script.count = 1; script.commands[0].kind = CMD_LOGGY3; script.commands[0].line = 1;
+    p.loggy_job = &job;
+    p.log = execution_log(log_path);
+    if (!p.log) { fputs("Cannot open execution log. Use --log with a writable path.\n", stderr); goto finish; }
+    window_enable_dpi();
+    active = &p; SetConsoleCtrlHandler(console_control, TRUE);
+    if (!playback_remote_open()) playback_log(&p, "remote control events unavailable; Telegram /pause /resume /stop will not work");
+    ok = playback_run(&p, &script, (DWORD)countdown * 1000);
+    SetConsoleCtrlHandler(console_control, FALSE); active = NULL;
+    playback_remote_close();
+    if (job.action == LOGGY_STATUS || job.action == LOGGY_RECORD || job.action == LOGGY_STOP)
+        printf("Recording state: %s\n", loggy_state_name(job.result));
+    exit_code = ok ? 0 : 1;
+    goto finish;
+invalid:
+    usage();
+finish:
+    if (p.log) fclose(p.log);
+    script_free(&script); profile_free(&profiles);
+    return exit_code;
+}
+/* A whole recorded work day: --session PROFILE_ID, or --dry-run-session PROFILE_ID to print the day. */
+static int session_main(wchar_t **argv, int argc) {
+    const wchar_t *profiles_path = NULL, *log_path = NULL;
+    wchar_t path[MAX_PATH];
+    unsigned long profile_id = 0, seed = 0, countdown = 10, target = 0, coding = 0, browsing = 0;
+    int i, dry = 0, ok, exit_code = 2;
+    ProfileSet profiles = {0};
+    SessionConfig config;
+    ProgrammingConfig programming;
+    ProjectManifest manifest = {0};
+    BrowseCatalog catalog = {0};
+    SideAppsConfig side_apps;
+    WorkSession session;
+    Script script = {0};
+    Playback p = {0};
+    char error[512];
+    memset(&config, 0, sizeof(config)); memset(&programming, 0, sizeof(programming));
+    memset(&side_apps, 0, sizeof(side_apps)); memset(&session, 0, sizeof(session));
+    for (i = 1; i < argc; ++i) {
+        if (!wcscmp(argv[i], L"--session") || !wcscmp(argv[i], L"--dry-run-session")) {
+            dry = !wcscmp(argv[i], L"--dry-run-session");
+            if (profile_id || !number_argument(argv, argc, &i, 1, UINT_MAX, &profile_id)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--seed")) {
+            if (!number_argument(argv, argc, &i, 0, INT32_MAX, &seed)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--countdown")) {
+            if (!number_argument(argv, argc, &i, 0, 3600, &countdown)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--target-minutes")) {
+            if (!number_argument(argv, argc, &i, 1, 24 * 60, &target)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--coding-minutes")) {
+            if (!number_argument(argv, argc, &i, 1, 600, &coding)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--browsing-minutes")) {
+            if (!number_argument(argv, argc, &i, 1, 600, &browsing)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--profiles") && i+1 < argc && !profiles_path) profiles_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--log") && i+1 < argc && !log_path) log_path = argv[++i];
+        else goto invalid;
+    }
+    if (!profiles_path) {
+        static wchar_t profiles_default[MAX_PATH];
+        if (!default_profile_file(L"profiles.json", profiles_default)) { fputs("profiles\\profiles.json not found; use --profiles\n", stderr); return 2; }
+        profiles_path = profiles_default;
+    }
+    if (!profile_load(profiles_path, &profiles, error, sizeof(error))) { fprintf(stderr, "profiles: %s\n", error); goto finish; }
+    if (!(session.profile = profile_find(&profiles, (unsigned)profile_id))) { fprintf(stderr, "no profile with id %lu\n", profile_id); goto finish; }
+    if (session.profile->main_task != PROFILE_TASK_PROGRAMMING || !session.profile->project_path) {
+        fputs("this profile's main task is not programming, or it has no project_path\n", stderr); goto finish;
+    }
+    if (!default_profile_file(L"session.json", path) || !session_config_load(path, &config, error, sizeof(error))) {
+        fprintf(stderr, "session.json: %s\n", *path ? error : "not found"); goto finish;
+    }
+    if (!default_profile_file(L"programming.json", path) || !programming_config_load(path, &programming, error, sizeof(error))) {
+        fprintf(stderr, "programming.json: %s\n", error); goto finish;
+    }
+    if (!project_manifest_load(programming.project_list, &manifest, error, sizeof(error))) { fprintf(stderr, "projects: %s\n", error); goto finish; }
+    if (!default_profile_file(L"browsing.json", path) || !browse_catalog_load(path, &catalog, error, sizeof(error))) {
+        fprintf(stderr, "browsing.json: %s\n", error); goto finish;
+    }
+    if (!default_profile_file(L"apps.json", path) || !side_apps_load(path, &side_apps, error, sizeof(error))) {
+        fprintf(stderr, "apps.json: %s\n", error); goto finish;
+    }
+    /* Short test days: a fixed target (total for today, as Loggy3 counts it) and slot lengths. */
+    if (target) config.target_minutes[0] = config.target_minutes[1] = (unsigned)target;
+    if (coding) config.coding_minutes[0] = config.coding_minutes[1] = (unsigned)coding;
+    if (browsing) config.browsing_minutes[0] = config.browsing_minutes[1] = (unsigned)browsing;
+    session.config = &config; session.programming = &programming; session.manifest = &manifest;
+    session.catalog = &catalog; session.side_apps = &side_apps;
+    session.seed = seed ? (uint32_t)seed : action_recording_seed();
+    if (dry) {
+        SessionPlan plan;
+        LoggyToday today;
+        HWND w = loggy_window(NULL);
+        long so_far = 0;
+        /* Today's total, read from Loggy3 without any input. */
+        if (w && loggy_today(w, NULL, &today) && today.found) so_far = loggy_today_seconds(&today);
+        else puts("(Loggy3's today row could not be read; counting from 0.)");
+        session_plan(&config, session.seed, (unsigned)so_far, session.profile->randomness_score, &plan);
+        printf("Seed %lu.\n", (unsigned long)session.seed);
+        session_print_plan(&config, &plan, session.profile, (unsigned)so_far);
+        puts("Dry-run complete; no input generated. Repeat with --seed to get the same day live.");
+        exit_code = 0; goto finish;
+    }
+    script.commands = calloc(1, sizeof(*script.commands));
+    if (!script.commands) goto finish;
+    script.count = 1; script.commands[0].kind = CMD_WORK_SESSION; script.commands[0].line = 1;
+    p.work_session = &session;
+    p.log = execution_log(log_path);
+    if (!p.log) { fputs("Cannot open execution log. Use --log with a writable path.\n", stderr); goto finish; }
+    window_enable_dpi();
+    active = &p; SetConsoleCtrlHandler(console_control, TRUE);
+    SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+    if (!playback_remote_open()) playback_log(&p, "remote control events unavailable; Telegram /pause /resume /stop will not work");
+    ok = playback_run(&p, &script, (DWORD)countdown * 1000);
+    SetConsoleCtrlHandler(console_control, FALSE); active = NULL;
+    playback_remote_close(); SetThreadExecutionState(ES_CONTINUOUS);
+    exit_code = ok ? 0 : 1;
+    goto finish;
+invalid:
+    usage();
+finish:
+    if (p.log) fclose(p.log);
+    script_free(&script); browse_catalog_free(&catalog); side_apps_free(&side_apps);
+    project_manifest_free(&manifest); programming_config_free(&programming); profile_free(&profiles);
+    return exit_code;
+}
+/* Clone every project in the list ahead of time, at its pinned commit. */
+static int fetch_main(wchar_t **argv, int argc) {
+    const wchar_t *programming_path = NULL;
+    wchar_t programming_default[MAX_PATH];
+    ProgrammingConfig config;
+    ProjectManifest manifest = {0};
+    char error[512];
+    size_t i, failed = 0;
+    int a;
+    memset(&config, 0, sizeof(config));
+    for (a = 1; a < argc; ++a) {
+        if (!wcscmp(argv[a], L"--fetch-projects")) continue;
+        if (!wcscmp(argv[a], L"--programming") && a+1 < argc && !programming_path) programming_path = argv[++a];
+        else { usage(); return 2; }
+    }
+    if (!programming_path) {
+        if (!default_profile_file(L"programming.json", programming_default)) { fputs("profiles\\programming.json not found; use --programming\n", stderr); return 2; }
+        programming_path = programming_default;
+    }
+    if (!programming_config_load(programming_path, &config, error, sizeof(error))) { fprintf(stderr, "programming: %s\n", error); return 2; }
+    if (!project_manifest_load(config.project_list, &manifest, error, sizeof(error))) {
+        fprintf(stderr, "projects: %s\n", error); programming_config_free(&config); return 2;
+    }
+    for (i = 0; i < manifest.count; ++i) {
+        char name[200];
+        WideCharToMultiByte(CP_UTF8, 0, manifest.items[i].name, -1, name, sizeof(name), NULL, NULL);
+        if (project_fetch(&config, &manifest.items[i], NULL, error, sizeof(error))) printf("ready: %s\n", name);
+        else { printf("FAILED: %s: %s\n", name, error); ++failed; }
+    }
+    printf("%zu of %zu project(s) ready in the reference folder.\n", manifest.count - failed, manifest.count);
+    project_manifest_free(&manifest); programming_config_free(&config);
+    return failed ? 1 : 0;
+}
 int main(void) {
     int argc, i, mode = 0, config_mode = 0, ok, exit_code = 2, countdown_selected = 0;
     wchar_t **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
@@ -57,6 +550,20 @@ int main(void) {
     Script script = {0}; Playback p = {0}; char error[512];
     ReferenceConfig config = {0};
     if (!argv) return 2;
+    for (i = 1; i < argc; ++i)
+        if (!wcscmp(argv[i], L"--browse") || !wcscmp(argv[i], L"--dry-run-browse")) {
+            exit_code = browse_main(argv, argc); LocalFree(argv); return exit_code;
+        } else if (!wcscmp(argv[i], L"--code") || !wcscmp(argv[i], L"--dry-run-code")) {
+            exit_code = code_main(argv, argc); LocalFree(argv); return exit_code;
+        } else if (!wcscmp(argv[i], L"--apps")) {
+            exit_code = apps_main(argv, argc); LocalFree(argv); return exit_code;
+        } else if (!wcscmp(argv[i], L"--session") || !wcscmp(argv[i], L"--dry-run-session")) {
+            exit_code = session_main(argv, argc); LocalFree(argv); return exit_code;
+        } else if (!wcscmp(argv[i], L"--loggy3")) {
+            exit_code = loggy_main(argv, argc); LocalFree(argv); return exit_code;
+        } else if (!wcscmp(argv[i], L"--fetch-projects")) {
+            exit_code = fetch_main(argv, argc); LocalFree(argv); return exit_code;
+        }
     for (i = 1; i < argc; ++i) {
         if (!wcscmp(argv[i], L"--help")) { usage(); exit_code = 0; goto finish; }
         if (!wcscmp(argv[i], L"--script") || !wcscmp(argv[i], L"--validate") || !wcscmp(argv[i], L"--dry-run") ||

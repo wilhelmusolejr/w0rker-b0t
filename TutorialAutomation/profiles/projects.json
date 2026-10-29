@@ -1,0 +1,6 @@
+{
+    "version": 1,
+    "projects": [
+        { "name": "kruzpayr", "url": "https://github.com/wilhelmusolejr/kruzpayr", "commit": "9c6fd8253ae1609627a788a3e62616657195a024" }
+    ]
+}

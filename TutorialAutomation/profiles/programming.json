@@ -1,0 +1,24 @@
+{
+    "version": 1,
+    "reference_projects": "../../programming_files",
+    "progress_folder": "progress",
+    "project_list": "projects.json",
+    "copy_instead_of_typing": ["package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.ico", "*.pdf", "*.zip"],
+    "ignore": [".git", "node_modules", "__pycache__", "venv", ".venv", "*.pyc", "dist", "build", "coverage", ".next", "*.min.js", "*.min.css", "*.map"],
+    "max_typed_bytes": 200000,
+    "max_project_characters": 150000,
+    "typing": {
+        "character_ms": [110, 260],
+        "newline_ms": [600, 1700],
+        "pause_every_chars": [160, 320],
+        "pause_ms": [4000, 11000]
+    },
+    "actions": {
+        "pause_ms": [1200, 2600],
+        "mouse_move_ms": [900, 1600]
+    },
+    "checkpoint_seconds": 45,
+    "idle_percent": 12,
+    "idle_seconds": [8, 40],
+    "mouse_wander_percent": 25
+}

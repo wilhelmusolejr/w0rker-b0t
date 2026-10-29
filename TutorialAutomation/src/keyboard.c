@@ -88,6 +88,18 @@ static int restore_indent(Playback *p, const wchar_t *line, const wchar_t *brack
         if (!(*c == L'\t' ? keyboard_press(p, VK_TAB) : send_unicode(p, L' '))) return 0;
     return keyboard_press(p, VK_END);
 }
+/* Sometimes hit a neighbouring key first, notice it, and erase it. Only letters, so the editor
+   never auto-closes or re-indents anything that Backspace would then have to undo. */
+static int typo(Playback *p, wchar_t ch) {
+    uint32_t value = p->typo_state ? p->typo_state : UINT32_C(0x2545f491);
+    wchar_t wrong;
+    value ^= value << 13; value ^= value >> 17; value ^= value << 5;
+    p->typo_state = value;
+    if ((value >> 8) % 100 >= p->typo_percent || !(wrong = typing_typo_neighbor(ch, value >> 20))) return 1;
+    ++p->typos;
+    return send_unicode(p, wrong) && playback_wait(p, 140 + (value >> 4) % 420) &&
+        keyboard_press(p, VK_BACK) && playback_wait(p, 60 + (value >> 12) % 160);
+}
 static int type_text(Playback *p, const wchar_t *text, const wchar_t *document, DWORD budget_ms,
                      size_t *consumed) {
     size_t i;
@@ -112,6 +124,7 @@ static int type_text(Playback *p, const wchar_t *text, const wchar_t *document, 
                 input[j].ki.wScan = text[i + j/2];
                 input[j].ki.dwFlags = KEYEVENTF_UNICODE | (j % 2 ? KEYEVENTF_KEYUP : 0);
             }
+            if (count == 2 && p->typo_percent && !typo(p, ch)) return 0;
             if (!playback_send(p, input, count)) return 0;
             if (count == 4) ++i;
             else if (document && (ch == L'}' || ch == L']' || ch == L')')) {

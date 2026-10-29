@@ -78,6 +78,38 @@ int window_process_is(HWND window, const wchar_t *expected) {
     return result;
 }
 
+int window_usable(HWND w) { return w && IsWindow(w) && IsWindowVisible(w) && !IsIconic(w); }
+typedef struct { const wchar_t *process, *cls; HWND found; } Fallback;
+static BOOL CALLBACK find_fallback(HWND w, LPARAM parameter) {
+    Fallback *f = (Fallback *)parameter;
+    wchar_t cls[64];
+    if (!window_usable(w) || GetWindow(w, GW_OWNER) || !GetWindowTextLengthW(w)) return TRUE;
+    if (f->cls && (!GetClassNameW(w, cls, 64) || wcscmp(cls, f->cls))) return TRUE;
+    if (!window_process_is(w, f->process)) return TRUE;
+    f->found = w; return FALSE;
+}
+int window_fix_target(Playback *p) {
+    static const struct { const wchar_t *process, *cls; } order[] = {
+        {L"Code.exe", NULL}, {L"chrome.exe", L"Chrome_WidgetWin_1"}, {L"explorer.exe", L"CabinetWClass"}};
+    HWND front = GetForegroundWindow(), target = NULL;
+    unsigned i;
+    if (window_usable(p->target) && window_target_foreground(p->target)) return 1;
+    if (window_usable(front)) { p->target = front; return 1; }
+    for (i = 0; i < sizeof(order) / sizeof(*order) && !target; ++i) {
+        Fallback f = {order[i].process, order[i].cls, NULL};
+        EnumWindows(find_fallback, (LPARAM)&f);
+        target = f.found;
+    }
+    if (!target) target = FindWindowW(L"Progman", NULL);
+    playback_log(p, "focus was on a hidden or minimized window; switching to a visible one");
+    if (!target) return 0;
+    if (IsIconic(target)) ShowWindow(target, SW_RESTORE);
+    SetForegroundWindow(target);
+    Sleep(300);
+    front = GetForegroundWindow();
+    p->target = window_usable(front) ? front : target;
+    return window_usable(p->target);
+}
 int window_activate_handle(Playback *p, HWND window) {
     if (!IsWindow(window) || !IsWindowVisible(window) || !IsWindowEnabled(window)) {
         playback_log(p, "requested window is unavailable or has a modal dialog"); return 0;

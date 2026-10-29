@@ -10,6 +10,147 @@ See the [project overview](../README.md) for the component map and the distincti
 
 [EXCEL_DEMO.md](EXCEL_DEMO.md) covers the Excel counterpart to reference coding: **10 ready-to-open `.xlsx` files, 20 worksheets, and 240 fictional company quotes**, based on the comparison workbook in `References`. Run `..\start-reference-excel.cmd` for visible typing in desktop Excel, or add `-DryRun` to validate the generated worksheet scripts without Excel or desktop input. Playback saves separate copies under `Excel Playback` and resumes saved checkpoints. Desktop Excel is required for live playback; it was not installed on the development machine.
 
+## Profile coding project
+
+`tutorial.exe --code PROFILE_ID` recreates a reference project from [`programming_files/`](../programming_files) by hand, in the profile's `project_path` (profile 1: `Desktop`, profile 2: `Documents`; a subfolder of either or an absolute path also works). From the workspace root, `start-coding.cmd 1` runs it for profile 1. Preview first with `tutorial.exe --dry-run-code 1`, which lists every file as TYPE, RESUME, COPY, DONE, or CONFLICT without sending input.
+
+What it does, in order:
+
+1. Creates the project folder visibly: on the desktop (Win+D, Ctrl+Shift+N, type the name), or in File Explorer for other paths (Win+E, address bar, Ctrl+Shift+N). The folder is named after the reference (`kruzpayr`); if a folder with that name already exists and this profile did not make it, it uses `kruzpayr-2` and so on.
+2. Opens Command Prompt in it (address bar, `cmd`) and types `mkdir` for the subfolders, then `code .`.
+3. Sets the workspace to literal Plain Text entry (the same settings as reference coding, saved in `.vscode/settings.json` of the new project).
+4. Goes through the files folder by folder, files before subfolders. Text files are created with Ctrl+N and Save As, then typed character by character and saved and verified every `checkpoint_seconds`. Images, lock files, files that are not UTF-8 text, and files over `max_typed_bytes` are copied instead of typed.
+5. Between checkpoints: random idle (`idle_percent`, `idle_seconds`) and random mouse movement over the code (`mouse_wander_percent`). While typing: the presentation pauses from `typing.pause_every_chars`, and the profile's `typo_percent` of letters are first typed as a neighbouring key, then erased and corrected. Saved files still match the reference exactly.
+
+Settings are in [profiles/programming.json](profiles/programming.json). **Resume and project history:** each profile has a history file in `profiles/progress/<local_id>.json` (kept out of git) listing its projects, their folders, and every file it created, typed, or copied. Run the same command again after any stop: it continues the unfinished project, re-checks every saved file, and resumes a partly typed file from its saved text. It never overwrites a file it did not create; such files are reported as conflicts before any input is sent. When a project is complete, the next run starts the next project in this profile's order that it has not finished.
+
+**Project list:** [profiles/projects.json](profiles/projects.json) lists the GitHub projects, each pinned to a full 40-character commit id so the reference never changes under a half-typed file:
+
+```json
+{ "name": "kruzpayr", "url": "https://github.com/wilhelmusolejr/kruzpayr", "commit": "9c6fd8253ae1609627a788a3e62616657195a024" }
+```
+
+To add a project, add a line; get its current commit with `git ls-remote <url> HEAD`. When a bot reaches a project, it is cloned in the background into `programming_files/<name>` at that commit (`git` must be installed; nothing is typed for this step). `tutorial.exe --fetch-projects` clones the whole list ahead of time. `programming_files/` is not tracked in this repository. Each profile works through the list in its own fixed order (derived from its `local_id`), so bots do not type the same projects in step. A project with more than `max_project_characters` to type is skipped and recorded as `skipped` in the history, so it is never downloaded or checked again for that profile. Generated folders and files (`dist`, `build`, `coverage`, `.next`, `*.min.js`, `*.map`, and the `ignore` list) are left out of the reference. A project in progress keeps the commit it started with, even if the list's commit later changes.
+
+## Side-app breaks
+
+During `--code` and `--browse`, every 8-15 minutes of the main task (`check_every_minutes`) there is a 20% chance (`chance_percent`) of a break in another app for 10-20 minutes (`minutes`). Afterwards the session returns to the window it left (activate, or Alt+Tab) and continues; in VS Code it first re-checks the saved file. Settings are in [profiles/apps.json](profiles/apps.json); `--no-side-apps` turns breaks off.
+
+| App (weight) | What happens |
+|---|---|
+| Notepad (30) | Opened from the Start menu with the mouse (see below), in a fresh tab. Types 1-4 notes from `notes`, filled with the profile's interests and hobbies (with its typo rate), pauses between them, then saves to `notes_folder` (`Documents\Notes\note-<date-time>.txt`). |
+| File Explorer (30) | The mouse moves to the pinned File Explorer taskbar icon and clicks it (a middle click when Explorer windows are already open, so a new window opens and the existing ones are left alone; Win+E only if the icon is not pinned). Browses with the mouse only, never typing a path: clicks one of `folders` in the sidebar (Desktop, Documents, Downloads, Pictures, Music, Videos; Projects = the profile's project_path, reached through its sidebar folder), double-clicks subfolders in the main view (scrolling to find them), goes back with the Back button or Alt+Left, scrolls, and pauses. Never opens files, renames, or deletes. |
+| Calculator (15) | Opened from the Start menu with the mouse, then clicks random calculations on the buttons with the mouse (types them if the buttons are named in another language). |
+| Images (25) | Finds a folder with pictures under `image_folders`, opens File Explorer from the taskbar icon the same way, browses there through the sidebar and folders, opens one picture in the default viewer, and steps through them with the arrow keys. Without pictures it browses folders instead. |
+
+**Start menu:** the mouse clicks the Start button on the taskbar; about half the time it clicks the app's pinned tile when there is one, otherwise it types the name into the Start search and clicks the result (Enter when several results match). Win+R is only a fallback when the Start menu does not respond.
+
+When the break ends, the app is closed with Alt+F4, or minimized and left open `leave_open_percent` (20%) of the time. If a step fails (a window that does not open, a control that moved), the app is closed and the main task continues; F9, F12, Ctrl+C, and Telegram `/stop` still stop everything. Try one app on its own with `tutorial.exe --apps 1 --app notepad --minutes 2`.
+
+## Work session (a whole recorded day)
+
+`start-session.cmd [PROFILE]` from the repository root, or `tutorial --session ID`.
+Preview the day with `tutorial --dry-run-session ID [--seed N]`: it reads today's total from
+Loggy3 (no input) and prints the planned timeline. Settings: `profiles/session.json`.
+
+1. **Prepare.** Reads Loggy3: open, recording, and today's recorded time (the Sessions page's UTC
+   day row plus the running timer). Rolls today's target, 10h15-10h45. Already at the target:
+   presses nothing. Already recording (for example after a restart): carries on.
+2. **Start look** (rolled): empty desktop, VS Code with the project, a short browse, or a random
+   app. Then Loggy3 Start (straight to the button or after looking over the window), then Loggy3
+   is minimized or left behind the work.
+3. **Work.** Coding slots (40-80 min) and browsing slots (10-20 min) take turns, with other-app
+   breaks (5-20 min, from `apps.json`) inside them. A coding slot ends by finishing its line and
+   saving; the next one resumes there, and moves on to the next project when one is done. After a
+   browsing slot Chrome is minimized, closed, or left behind.
+   **Idles away from the desk** take about 5% of the day (`idle_percent`; a little more for a
+   profile with a higher randomness score): every 20-40 min of recorded work there is a chance of
+   1-6 min with no input, sometimes with one small mouse nudge halfway. They start only at safe
+   points (a coding checkpoint, between browsing steps, between slots), are planned up front so
+   the dry run lists them, and count toward the target (Loggy3 keeps recording).
+4. **Watch** (every 15 s, no input): Loggy3's timer. Today's recorded time near the target, or
+   Telegram /stop, ends the day. Loggy3 stopped by itself: Start is clicked again (once more after
+   2 min), with a Telegram alert.
+5. **End look** (rolled): direct stop, close everything, or close 1-2 apps (X button, Alt+F4, or
+   the taskbar menu, at random), then Loggy3 Stop, and Loggy3 is left, minimized, or closed. A
+   summary goes to the log and, through the monitor, to Telegram.
+
+Telegram /stop during a session finishes the line, saves, runs the ending and stops the recording;
+F9/F12 still stop at once (and leave Loggy3 recording). Short test day:
+`start-session.cmd 1 --target-minutes 25 --coding-minutes 8 --browsing-minutes 4` (the target is
+today's total in Loggy3, so it includes what was already recorded today).
+
+The Telegram monitor's /status and screenshot captions start with Loggy3's state, today's recorded
+hours (and the target), and the session's current task. `monitor --status` prints that text
+locally without sending anything.
+
+## Loggy3 recorder
+
+`start-loggy3.cmd [ACTION] [options]` from the repository root, or
+`tutorial --loggy3 ACTION [options]`. C port of `experiments/loggy3-window`.
+
+| Action | What it does |
+|---|---|
+| `status` (default) | Reads whether Loggy3 is recording. No input, no countdown; works while Loggy3 is minimized. |
+| `show` | Clicks Loggy3's taskbar icon (the Start menu when it has none), then its Maximize button. Skips the click when it is already in front. |
+| `minimize` | Clicks its Minimize button. Nothing happens if it is already minimized. |
+| `close` | Shows it, then clicks its Close button (Alt+F4 when there is none). Refuses while recording. |
+| `record` / `stop` | Presses the Start / Stop button once, then waits up to 20 s for the new state. |
+| `demo` | Show, keep it in front for `--hold` seconds (5), then minimize. |
+
+Options: `--dry-run` (plan only, nothing pressed), `--hover-only` (record/stop: rest the pointer
+on the button for `--hover-seconds`, default 5, without clicking), `--minimize-after`,
+`--profile ID` (whose mouse hand to use, default 1), `--countdown`, `--seed`, `--log`.
+
+Everything is found through Windows accessibility: the taskbar icon by name, the title-bar
+buttons by name, and the recording button as the one visible button whose class list has
+`btn-record` (session-history rows are ignored). The label decides the state: Start / Start
+recording means stopped, Stop / Stop recording means recording; a disabled button means busy.
+For record, stop and close, half the time the pointer heads straight for the button once
+Loggy3 is in front; the other half it first rests over the window for a moment. Before pressing, the button is read again, and the element under the pointer must be that same
+button with the same label. The press is sent once and never retried: if the new state is not
+confirmed within 20 s, it says so and leaves Loggy3 alone. F9/F12 stop the automation, not an
+ongoing recording.
+
+Checked live (read only) on 2026-10-28: status and dry runs found `Start` and the idle timer
+`--:--:--` while Loggy3 was minimized. A real Start/Stop press has not been run yet (T12).
+
+## Profile mouse hand
+
+Every visible pointer move in the browsing, coding and side-app runs follows the running
+profile's "hand", derived from its `local_id` and `randomness_score`, so one person always
+moves the same way and two profiles move differently:
+
+- **Wobble:** the curve sways a few pixels sideways (a slow sway plus a faster tremor),
+  fading out at both ends so it still lands exactly. Short moves barely wobble.
+- **Overshoot:** on longer aimed moves (120 px or more), roughly 15-35% of the time
+  depending on the profile, the pointer goes a little past the target (sometimes stops
+  short), pauses 40-180 ms, then makes a small correcting move. Resting moves never do.
+- **Speed:** each hand is a little quicker or slower than the base speed.
+
+These values are not configurable yet (see TRACKER.md D4).
+
+## Profile browsing session
+
+`tutorial.exe --browse PROFILE_ID` runs a browsing session for a profile in [profiles/profiles.json](profiles/profiles.json), using the sites, search templates, and settings in [profiles/browsing.json](profiles/browsing.json). From the workspace root, `start-browsing.cmd 2 15` browses as profile 2 for 15 minutes. It is the C port of the [browser-explorer prototype](../experiments/browser-explorer/README.md), driving the normal Chrome window through native UI Automation instead of a PowerShell helper.
+
+| Behavior | How it works |
+|---|---|
+| Tabs | Fills 1-5 tabs (`settings.tabs`). Each tab is a direct site (`direct_site_percent`) or a Google search followed by one organic result. Both are typed after a mouse click on the address bar's text area (the first click highlights the old address; Ctrl+L is only a fallback). Then it switches between tabs (mouse on the tab, or Ctrl+Tab) until the time is up. |
+| What to open | Sites whose `topics` match the profile's interests or hobbies are 4x more likely per match; programmers also lean toward programming docs. Searches are question, phrase/quote, song lyrics, apps, or Loggy3 (`search_weights`), filled from the profile's interests. |
+| Side search | With `new_tab_search_percent` (50%) per tab visit: Ctrl+T, search, read the results, Ctrl+W back to the main browsing. |
+| Bookmark | With `bookmark_percent` per tab visit: Ctrl+D, then Enter. |
+| Random idle | `idle_percent` of actions are 8-40 s with no input at all. |
+| Random mouse movement | Curved cursor paths whose time depends on distance, varied click points inside a target, resting points away from clicked links, and drifts over the page while reading. |
+| Scrolling | Passes of 2-4 bursts mixing fast scans (9-20 notches) and slow bursts (1-3 notches), reversing at the page end. |
+| Links | After 18-55 s on a page it clicks a visible same-site link, preferring pages not yet visited. Sign-in, account, settings, download, and buy/subscribe/delete-style links are skipped. Before clicking it checks through accessibility that the link itself is under the pointer. Open dialogs are dismissed with Escape. |
+
+**Errors recover automatically.** A page that cannot be read through accessibility is still read and scrolled, just without link clicks. Any other error (lost focus, a page that never loads, a popup) triggers recovery: first the browser is brought back (activate, or Alt+Tab), Escape closes leftovers, and a new tab opens a random site or search. If that fails, or the next error follows right away, Chrome is closed (Alt+F4) and reopened from the taskbar with a random site or search. After 5 failed recoveries in a row the session stops. F9, F12, Ctrl+C, and Telegram `/stop` are never recovered from. A locked desktop is waited out.
+
+`--dry-run-browse PROFILE_ID --seed N` prints the planned tabs, searches, side searches, and bookmarks without any input; a live `--browse` with the same `--seed` opens the same tabs. Other options: `--minutes` (1-480, default 10), `--launch run` to use Windows Run instead of the pinned Chrome taskbar icon, `--countdown`, `--log`. F8 pauses, F9/F12 stop, and Telegram `/pause` `/resume` `/stop` work as usual.
+
+Not yet decided, so currently provisional: at the end it closes a random number of tabs and leaves the browser open (TRACKER.md D8); the randomness score and typo percentage do not affect browsing yet (D4, T44).
+
 ## Job settings: `scripts/job.json`
 
 `start-reference-coding.cmd` now runs [scripts/job.json](scripts/job.json), a short hand-edited file (version 2). Source code is read straight from the folder; nothing is embedded or regenerated. Every setting is checked before any input is sent.

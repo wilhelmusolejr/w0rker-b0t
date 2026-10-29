@@ -5,6 +5,11 @@
 #include "playback_controls.h"
 #include "coding_action.h"
 #include "browser_action.h"
+#include "browser_session.h"
+#include "project_action.h"
+#include "side_apps.h"
+#include "loggy3.h"
+#include "work_session.h"
 #include <stdarg.h>
 #include <string.h>
 
@@ -23,7 +28,12 @@ void playback_log(Playback *p, const char *format, ...) {
 }
 
 int playback_send(Playback *p, INPUT *input, UINT count) {
-    UINT sent = SendInput(count, input, sizeof(INPUT));
+    UINT sent, i;
+    for (i = 0; i < count; ++i) {
+        if (input[i].type == INPUT_KEYBOARD) input[i].ki.dwExtraInfo = PLAYBACK_INPUT_TAG;
+        else if (input[i].type == INPUT_MOUSE) input[i].mi.dwExtraInfo = PLAYBACK_INPUT_TAG;
+    }
+    sent = SendInput(count, input, sizeof(INPUT));
     if (sent == count) return 1;
     /* Complete release of any partially delivered batch, including Unicode units. */
     { UINT i; for (i = 0; i < sent; ++i) {
@@ -46,11 +56,12 @@ void playback_release(Playback *p) {
         input.ki.wScan = (WORD)MapVirtualKeyW(i, MAPVK_VK_TO_VSC);
         if (i == VK_LWIN || (i >= VK_PRIOR && i <= VK_DOWN) || i == VK_INSERT || i == VK_DELETE)
             input.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+        input.ki.dwExtraInfo = PLAYBACK_INPUT_TAG;
         if (SendInput(1, &input, sizeof(input)) != 1) playback_log(p, "key release failed for %u", i);
         p->held[i] = 0;
     }
     for (i = 0; i < 3; ++i) if (p->mouse_held & (1u << i)) {
-        INPUT input = {0}; input.type = INPUT_MOUSE; input.mi.dwFlags = mouse_up[i];
+        INPUT input = {0}; input.type = INPUT_MOUSE; input.mi.dwFlags = mouse_up[i]; input.mi.dwExtraInfo = PLAYBACK_INPUT_TAG;
         if (SendInput(1, &input, sizeof(input)) != 1) playback_log(p, "mouse release failed for button %u", i);
     }
     p->mouse_held = 0;
@@ -82,8 +93,51 @@ int playback_guard(Playback *p) {
     return 1;
 }
 
+int playback_yield(const Playback *p) {
+    return InterlockedCompareExchange((volatile LONG *)&p->wind_down, 0, 0) ||
+        InterlockedCompareExchange((volatile LONG *)&p->yield, 0, 0) || (p->deadline && GetTickCount64() >= p->deadline);
+}
+/* The session's periodic check, only between inputs: never while a key or button is held. */
+static void run_watch(Playback *p) {
+    unsigned i;
+    if (!p->watch || p->in_watch || GetTickCount64() < p->next_watch || p->mouse_held) return;
+    for (i = 0; i < 256; ++i) if (p->held[i]) return;
+    p->in_watch = 1;
+    p->watch(p);
+    p->next_watch = GetTickCount64() + (p->watch_ms ? p->watch_ms : 15000);
+    p->in_watch = 0;
+}
+/* The person left the computer alone long enough: put playback's window back in front (they may
+   have switched away). Windows lets an app switch windows while a key is held, so Alt is held for
+   the switch; if it still fails, the next guarded step stops the task and its caller recovers. */
+static void user_left(Playback *p) {
+    INPUT alt[2];
+    playback_log(p, "no mouse or keyboard input for %lu s; continuing", p->user_quiet_ms / 1000);
+    if (!p->target || !IsWindow(p->target) || window_target_foreground(p->target)) return;
+    memset(alt, 0, sizeof(alt));
+    alt[0].type = alt[1].type = INPUT_KEYBOARD;
+    alt[0].ki.wVk = alt[1].ki.wVk = VK_MENU; alt[1].ki.dwFlags = KEYEVENTF_KEYUP;
+    alt[0].ki.dwExtraInfo = alt[1].ki.dwExtraInfo = PLAYBACK_INPUT_TAG;
+    if (IsIconic(p->target)) ShowWindow(p->target, SW_RESTORE);
+    SendInput(1, &alt[0], sizeof(INPUT));
+    SetForegroundWindow(p->target);
+    Sleep(60);
+    SendInput(1, &alt[1], sizeof(INPUT));
+    Sleep(300);
+    /* Alt alone may have opened the window's menu bar. */
+    if (window_target_foreground(p->target)) {
+        INPUT escape[2];
+        memset(escape, 0, sizeof(escape));
+        escape[0].type = escape[1].type = INPUT_KEYBOARD;
+        escape[0].ki.wVk = escape[1].ki.wVk = VK_ESCAPE; escape[1].ki.dwFlags = KEYEVENTF_KEYUP;
+        escape[0].ki.dwExtraInfo = escape[1].ki.dwExtraInfo = PLAYBACK_INPUT_TAG;
+        SendInput(2, escape, sizeof(INPUT));
+        playback_log(p, "back to the window playback was using");
+    } else playback_log(p, "could not get back to the window playback was using");
+}
 int playback_poll(Playback *p) {
     ULONGLONG pause_started = p->paused ? GetTickCount64() : 0;
+    int user;
     for (;;) {
         MSG message;
         while (PeekMessageW(&message, NULL, 0, 0, PM_REMOVE)) {
@@ -113,6 +167,11 @@ int playback_poll(Playback *p) {
                 if (p->paused) { p->paused = 0; playback_log(p, "resumed remotely"); }
                 break;
             case PLAYBACK_REMOTE_STOP:
+                if (p->soft_stop) {
+                    if (!InterlockedExchange(&p->wind_down, 1))
+                        playback_log(p, "remote stop requested; finishing the line, saving, and ending the session");
+                    break;
+                }
                 playback_log(p, "remote stop requested");
                 InterlockedExchange(&p->user_stop, 1); InterlockedExchange(&p->stopped, 1);
                 break;
@@ -125,9 +184,18 @@ int playback_poll(Playback *p) {
             playback_log(p, "interactive desktop unavailable; stopping");
             InterlockedExchange(&p->stopped, 1); playback_release(p); return 0;
         }
-        if (!p->paused) {
+        /* The person is using the computer: hold off until they have left it alone for user_quiet_ms. */
+        user = p->user_quiet_ms && playback_user_idle_ms() < p->user_quiet_ms;
+        if (user && !p->user_hold) {
+            p->user_hold = 1;
+            playback_log(p, "someone is using the computer; pausing until there is no mouse or keyboard input for %lu s",
+                p->user_quiet_ms / 1000);
+        }
+        if (!p->paused && !user) {
             if (pause_started) p->paused_ms += GetTickCount64() - pause_started;
             p->pause_deferred = 0;
+            if (p->user_hold) { p->user_hold = 0; user_left(p); }
+            run_watch(p);
             return 1;
         }
         /* Never pause mid key press, chord, or drag: let the caller finish its release first.
@@ -141,6 +209,7 @@ int playback_poll(Playback *p) {
           }
           if (p->pause_deferred) { p->pause_deferred = 0; pause_started = GetTickCount64(); }
         }
+        if (!pause_started) pause_started = GetTickCount64();
         Sleep(10);
     }
 }
@@ -196,6 +265,11 @@ static int execute(Playback *p, const Command *c) {
         case CMD_CODE_REFERENCE: return coding_reference(p, c->path, c->text);
         case CMD_DESKTOP_CODE_REFERENCE: return coding_desktop_reference(p, c->path, c->text);
         case CMD_REFERENCE_BATCH: return coding_reference_batch(p);
+        case CMD_BROWSE_SESSION: return p->browse_session && browser_session_run(p, p->browse_session);
+        case CMD_CODE_PROJECT: return p->coding_project && coding_project_run(p, p->coding_project);
+        case CMD_SIDE_APP: return p->side_app_job && side_apps_job(p, p->side_app_job);
+        case CMD_LOGGY3: return p->loggy_job && loggy_job(p, p->loggy_job);
+        case CMD_WORK_SESSION: return p->work_session && work_session_run(p, p->work_session);
         case CMD_ACTION_PACE:
             if (c->n[0] < 0) p->action_pace.enabled = 0;
             else {
@@ -250,6 +324,7 @@ int playback_run(Playback *p, const Script *script, DWORD countdown_ms) {
                 remaining -= step;
             }
         }
+        p->user_quiet_ms = 20000;
     }
     for (i = 0; i < script->count; ++i) {
         const Command *c = &script->commands[i];

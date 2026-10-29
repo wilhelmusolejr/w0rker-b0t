@@ -1,4 +1,5 @@
 #include "typing_pace.h"
+#include <string.h>
 
 /* A recorded seed gives each presentation a repeatable sequence of delays. */
 static unsigned between(TypingPace *p, unsigned minimum, unsigned maximum) {
@@ -45,4 +46,18 @@ TypingDelay typing_pace_next(TypingPace *p, wchar_t character) {
     }
     p->previous = character;
     return delay;
+}
+wchar_t typing_typo_neighbor(wchar_t ch, uint32_t roll) {
+    static const char *const near_keys[26] = {
+        "qwsz", "vghn", "xdfv", "serfcx", "wsdr", "drtgvc", "ftyhbv", "gyujnb", "ujko", "huikmn",
+        "jiolm", "kop", "njk", "bhjm", "iklp", "ol", "wa", "edft", "awedxz", "rfgy", "yhji",
+        "cfgb", "qase", "zsdc", "tghu", "asx"
+    };
+    int upper = ch >= L'A' && ch <= L'Z';
+    const char *keys;
+    wchar_t pick;
+    if (!upper && !(ch >= L'a' && ch <= L'z')) return 0;
+    keys = near_keys[(upper ? ch - L'A' : ch - L'a')];
+    pick = (wchar_t)keys[roll % strlen(keys)];
+    return upper ? (wchar_t)(pick - L'a' + L'A') : pick;
 }

@@ -16,6 +16,7 @@
 #include "script_engine.h"
 #include "window_manager.h"
 #include "playback_controls.h"
+#include "loggy3.h"
 
 typedef struct {
     wchar_t token[128], root[MAX_PATH], logs[MAX_PATH], launcher[MAX_PATH];
@@ -29,6 +30,7 @@ typedef struct {
     long long offset;
     char partial[1024];
     char time[16], current_file[200], checkpoint[64], last_visit[400], next_visit[64];
+    char task[200], target[32]; /* from a work session's SESSION TASK / SESSION TARGET lines */
     char tail[TAIL_LINES][400];
     char reason[800];
     unsigned tail_count, tail_next;
@@ -359,7 +361,26 @@ static int read_line(char *line, char *event, size_t capacity) {
         state.tail_next = (state.tail_next + 1) % TAIL_LINES;
         if (state.tail_count < TAIL_LINES) ++state.tail_count;
     }
-    if (!strncmp(message, "reference ", 10) && strchr(message, '/') && strstr(message, ": "))
+    if (!strncmp(message, "SESSION TASK: ", 14)) {
+        copy_after(state.task, sizeof(state.task), message, "SESSION TASK: ");
+        state.current_file[0] = 0;
+    } else if (!strncmp(message, "SESSION TARGET: ", 16)) {
+        char *end;
+        copy_after(state.target, sizeof(state.target), message, "SESSION TARGET: ");
+        if ((end = strstr(state.target, " today"))) *end = 0;
+    } else if (!strncmp(message, "SESSION ALERT: ", 15)) {
+        snprintf(event, capacity, "ALERT: %s", message + 15);
+    } else if (!strncmp(message, "SESSION SUMMARY: ", 17)) {
+        state.finished = 1;
+        snprintf(event, capacity, "%s", message + 17);
+    } else if ((!strncmp(message, "typing ", 7) || !strncmp(message, "resuming ", 9)) && strstr(message, " characters)")) {
+        /* "typing src/App.jsx (1234 characters)" */
+        char *open = strrchr(message, '(');
+        const char *name = message + (message[0] == 't' ? 7 : 9);
+        snprintf(state.current_file, sizeof(state.current_file), "%.*s", open ? (int)(open - name - 1) : 199, name);
+    } else if (!strncmp(message, "side app break: ", 16)) {
+        copy_after(state.current_file, sizeof(state.current_file), message, "side app break: ");
+    } else if (!strncmp(message, "reference ", 10) && strchr(message, '/') && strstr(message, ": "))
         copy_after(state.current_file, sizeof(state.current_file), message, "reference ");
     else if (!strncmp(message, "verified reference checkpoint: ", 31))
         copy_after(state.checkpoint, sizeof(state.checkpoint), message, "verified reference checkpoint: ");
@@ -445,14 +466,36 @@ static int poll_log(int quiet, char events[][200], unsigned *event_count) {
     CloseHandle(file);
     return result;
 }
+/* Loggy3 and today's recorded hours, read from the app itself (accessibility, no input). */
+static size_t loggy_text(char *out, size_t capacity) {
+    HWND w = loggy_window(NULL);
+    LoggyToday today;
+    char timer[32] = "", hours[48] = "not on screen";
+    long seconds;
+    if (!w) return (size_t)snprintf(out, capacity, "Loggy3: not open\n");
+    if (!loggy_today(w, NULL, &today)) return (size_t)snprintf(out, capacity, "Loggy3: could not be read\n");
+    if (today.timer_seconds >= 0)
+        snprintf(timer, sizeof(timer), " (timer %ld:%02ld:%02ld)", today.timer_seconds / 3600, today.timer_seconds / 60 % 60, today.timer_seconds % 60);
+    if ((seconds = loggy_today_seconds(&today)) >= 0) snprintf(hours, sizeof(hours), "%ldh %02ldm recorded", seconds / 3600, seconds / 60 % 60);
+    return (size_t)snprintf(out, capacity, "Loggy3: %s%s\nToday (UTC day): %s%s%s\n",
+        today.state == LOGGY_RECORDING ? "RECORDING" : today.state == LOGGY_STOPPED ? "not recording" :
+        today.state == LOGGY_BUSY ? "busy (switching)" : "unknown", timer, hours,
+        *state.target ? " of " : "", *state.target ? state.target : "");
+}
 static void status_text(char *out, size_t capacity, int with_tail) {
     int running = tutorial_running(), desktop = window_desktop_ready();
     ULONGLONG idle;
     size_t used;
     unsigned i;
+    char loggy[300];
+    loggy_text(loggy, sizeof(loggy));
     EnterCriticalSection(&state_lock);
     idle = state.last_change ? (GetTickCount64() - state.last_change) / 60000 : 0;
-    used = (size_t)snprintf(out, capacity,
+    /* "Now:" only during a work session; other playback keeps its File line below. */
+    if (*state.task) used = (size_t)snprintf(out, capacity, "%sNow: %s%s%s\n", loggy, state.task,
+        *state.current_file ? " | " : "", state.current_file);
+    else used = (size_t)snprintf(out, capacity, "%s", loggy);
+    if (used < capacity) used += (size_t)snprintf(out + used, capacity - used,
         "Playback: %s\nDesktop: %s\nFile: %s\nProgress: %s characters\nNext browser visit: %s\nLast visit: %s\n"
         "Last log line: %s (%llu min ago)",
         !running ? (state.finished ? "finished" : "NOT RUNNING") : state.paused ? "PAUSED" : "running",
@@ -513,7 +556,8 @@ static void handle_command(const char *chat, const char *text) {
         if (!tutorial_running()) send_text("Playback is not running.");
         else if (!signal_playback(name)) send_text("Playback is running but did not accept remote commands (restart it with the new build).");
         else send_text(command[1] == 'p' ? "Pause sent. Playback pauses at its next safe point; /resume continues." :
-            command[1] == 'r' ? "Resume sent." : "Stop sent. Playback releases input and stops; it will not auto-restart. /run starts it again.");
+            command[1] == 'r' ? "Resume sent." : "Stop sent. A work session finishes its line, saves, runs its ending and stops the "
+            "Loggy3 recording; other playback releases input and stops at once. /run starts it again.");
     } else if (!strcmp(command, "/run")) { run_launcher(reply, sizeof(reply)); send_text(reply); }
     else send_text("Commands:\n/status - progress and state\n/screenshot - picture of the desktop\n/log - recent log lines\n"
         "/pause, /resume - like F8\n/stop - like F9 (no auto-restart)\n/run - start the reference launcher");
@@ -604,8 +648,19 @@ int main(void) {
         fwrite(jpeg, 1, size, out); fclose(out); free(jpeg);
         printf("Saved %lu-byte JPEG.\n", size); return 0;
     }
+    if (argv && argc >= 2 && argc <= 3 && !wcscmp(argv[1], L"--status")) {
+        /* Local check of the status text (what /status and screenshot captions say); nothing is sent. */
+        char text[4000];
+        InitializeCriticalSection(&state_lock);
+        if (load_config(argc == 3 ? argv[2] : L"notify.json")) {
+            EnterCriticalSection(&state_lock); poll_log(1, events, &event_count); LeaveCriticalSection(&state_lock);
+        }
+        status_text(text, sizeof(text), 0);
+        puts(text);
+        return 0;
+    }
     if (argv && argc == 3 && !wcscmp(argv[1], L"--config")) config_path = argv[2];
-    else if (argv && argc != 1) { puts("monitor [--config notify.json] | monitor --screenshot FILE.jpg"); return 2; }
+    else if (argv && argc != 1) { puts("monitor [--config notify.json] | monitor --status [notify.json] | monitor --screenshot FILE.jpg"); return 2; }
     single = CreateMutexW(NULL, FALSE, L"Local\\TutorialAutomationMonitor");
     if (GetLastError() == ERROR_ALREADY_EXISTS) { puts("The monitor is already running."); return 0; }
     if (!load_config(config_path)) return 2;

@@ -58,7 +58,66 @@ done:
     return matches == 1 && playback_poll(p) && playback_guard(p);
 }
 
-static int control_rect(Playback *p, int type, const wchar_t *name, int contains_name, RECT *rect, int quiet) {
+static BOOL CALLBACK find_tree(HWND window, LPARAM result) {
+    wchar_t cls[32];
+    if (IsWindowVisible(window) && GetClassNameW(window, cls, 32) && !wcscmp(cls, L"SysTreeView32")) {
+        *(HWND *)result = window; return FALSE;
+    }
+    return TRUE;
+}
+static int sidebar_name_matches(const wchar_t *label, const wchar_t *folder) {
+    wchar_t pinned[160];
+    size_t n, m;
+    if (!_wcsicmp(label, folder)) return 1;
+    swprintf(pinned, 160, L"%ls (pinned)", folder);
+    n = wcslen(label); m = wcslen(pinned);
+    /* "Documents (pinned)", or the first Quick Access entry: "Start of Quick Access - Desktop (pinned)". */
+    return n >= m && !_wcsicmp(label + n - m, pinned) && (n == m || (n > m + 2 && !wcsncmp(label + n - m - 3, L" - ", 3)));
+}
+int ui_explorer_sidebar_rect(Playback *p, const wchar_t *folder, RECT *rect) {
+    HWND tree = NULL;
+    IAccessible *accessible = NULL;
+    VARIANT *children = NULL;
+    LONG count = 0, obtained = 0, i;
+    HRESULT initialized;
+    int found = 0;
+    if (!playback_guard(p)) return 0;
+    EnumChildWindows(p->target, find_tree, (LPARAM)&tree);
+    if (!tree) return 0;
+    initialized = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    if (FAILED(initialized)) return 0;
+    if (FAILED(AccessibleObjectFromWindow(tree, OBJID_CLIENT, &IID_IAccessible, (void **)&accessible)) ||
+        FAILED(IAccessible_get_accChildCount(accessible, &count)) || count < 1 || count > 4096) goto done;
+    children = calloc((size_t)count, sizeof(*children));
+    if (!children || FAILED(AccessibleChildren(accessible, 0, count, children, &obtained))) goto done;
+    for (i = 0; i < obtained && !found; ++i) {
+        IAccessible *object = accessible;
+        VARIANT child = children[i], state;
+        BSTR label = NULL;
+        LONG x, y, width, height;
+        if (child.vt == VT_DISPATCH) {
+            if (FAILED(IDispatch_QueryInterface(child.pdispVal, &IID_IAccessible, (void **)&object))) continue;
+            VariantInit(&child); child.vt = VT_I4; child.lVal = CHILDID_SELF;
+        } else if (child.vt != VT_I4) continue;
+        VariantInit(&state);
+        if (SUCCEEDED(IAccessible_get_accName(object, child, &label)) && label && sidebar_name_matches(label, folder) &&
+            SUCCEEDED(IAccessible_get_accState(object, child, &state)) && state.vt == VT_I4 &&
+            !(state.lVal & (STATE_SYSTEM_INVISIBLE | STATE_SYSTEM_OFFSCREEN)) &&
+            SUCCEEDED(IAccessible_accLocation(object, &x, &y, &width, &height, child)) && width > 3 && height > 3) {
+            rect->left = x; rect->top = y; rect->right = x + width; rect->bottom = y + height;
+            found = 1;
+        }
+        SysFreeString(label);
+        if (object != accessible) IAccessible_Release(object);
+    }
+done:
+    if (children) { for (i = 0; i < count; ++i) VariantClear(&children[i]); free(children); }
+    if (accessible) IAccessible_Release(accessible);
+    CoUninitialize();
+    return found && playback_poll(p) && playback_guard(p);
+}
+
+static int control_rect(Playback *p, HWND window, int type, const wchar_t *name, int contains_name, RECT *rect, int quiet) {
     IUIAutomation *automation = NULL;
     IUIAutomationElement *root = NULL;
     IUIAutomationElementArray *elements = NULL;
@@ -67,12 +126,12 @@ static int control_rect(Playback *p, int type, const wchar_t *name, int contains
     HRESULT initialized;
     unsigned matches = 0;
     int count = 0, i;
-    if (!playback_guard(p)) return 0;
+    if (quiet != 2 && !playback_guard(p)) return 0;
     initialized = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     if (FAILED(initialized)) return 0;
     VariantInit(&property); property.vt = VT_I4; property.lVal = type;
     if (FAILED(CoCreateInstance(&CLSID_CUIAutomation, NULL, CLSCTX_INPROC_SERVER, &IID_IUIAutomation,
-        (void **)&automation)) || FAILED(IUIAutomation_ElementFromHandle(automation, (UIA_HWND)p->target, &root)) ||
+        (void **)&automation)) || FAILED(IUIAutomation_ElementFromHandle(automation, (UIA_HWND)window, &root)) ||
         FAILED(IUIAutomation_CreatePropertyCondition(automation, UIA_ControlTypePropertyId, property, &condition)) ||
         FAILED(IUIAutomationElement_FindAll(root, TreeScope_Descendants, condition, &elements)) ||
         FAILED(IUIAutomationElementArray_get_Length(elements, &count)) || count > 4096) goto done;
@@ -98,19 +157,25 @@ done:
     if (automation) IUIAutomation_Release(automation);
     CoUninitialize();
     if (matches != 1 && !quiet) playback_log(p, "control must match one visible accessible element; found %u", matches);
-    return matches == 1 && playback_poll(p) && playback_guard(p);
+    return matches == 1 && playback_poll(p) && (quiet == 2 || playback_guard(p));
 }
 int ui_control_rect(Playback *p, int type, const wchar_t *name, int contains_name, RECT *rect) {
-    return control_rect(p,type,name,contains_name,rect,0);
+    return control_rect(p,p->target,type,name,contains_name,rect,0);
 }
 int ui_find_control_rect(Playback *p, int type, const wchar_t *name, RECT *rect) {
-    return control_rect(p,type,name,0,rect,1);
+    return control_rect(p,p->target,type,name,0,rect,1);
+}
+int ui_window_control_rect(Playback *p, HWND window, int type, const wchar_t *name, RECT *rect) {
+    return window && control_rect(p,window,type,name,1,rect,1);
+}
+int ui_unguarded_control_rect(Playback *p, HWND window, int type, const wchar_t *name, RECT *rect) {
+    return window && control_rect(p,window,type,name,1,rect,2);
 }
 int ui_wait_control_rect(Playback *p, int type, const wchar_t *name, int contains_name, RECT *rect, DWORD timeout_ms) {
     ULONGLONG start = GetTickCount64(), paused = p->paused_ms;
     do {
         if (!playback_poll(p) || !playback_guard(p)) return 0;
-        if (control_rect(p,type,name,contains_name,rect,1)) return 1;
+        if (control_rect(p,p->target,type,name,contains_name,rect,1)) return 1;
         if (!playback_wait(p,250)) return 0;
     } while (GetTickCount64()-start-(p->paused_ms-paused) < timeout_ms);
     playback_log(p,"expected accessible control did not become ready within %lu ms",timeout_ms); return 0;

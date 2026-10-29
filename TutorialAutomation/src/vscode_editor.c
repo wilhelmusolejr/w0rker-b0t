@@ -33,6 +33,10 @@ int vscode_select_plain_text(Playback *p) {
         !ui_wait_control_rect(p,UIA_ButtonControlTypeId,L"Plain Text",0,&status,10000)) return 0;
     playback_log(p,"verified editor language: Plain Text"); return 1;
 }
+int vscode_revert_file(Playback *p) {
+    if (!command(p,L"File: Revert File") || !presentation_rest(p,"unsaved changes reverted")) return 0;
+    playback_log(p,"editor reverted to the saved checkpoint"); return 1;
+}
 int vscode_select_lf(Playback *p) {
     RECT status;
     if (!command(p,L"Change End of Line Sequence") ||

@@ -6,3 +6,5 @@ TutorialAutomation/scripts/demo/tutorial-demo.exe
 /logs/
 /.tmp/
 /Excel Playback/
+/TutorialAutomation/profiles/progress/
+/programming_files/

@@ -1,6 +1,6 @@
 # Consolidated project work plan
 
-Updated: 2026-10-28
+Updated: 2026-10-29
 
 This backlog combines all six reference photos: three original notebook pages
 and three newer planning images. Repeated items are merged by capability.
@@ -24,16 +24,26 @@ The implementation target remains C, with Python used to test concepts first.
 | Loggy3 controls | [Prototype](experiments/loggy3-window/README.md) supports window control and state-aware recording commands. Window actions, status, dry-run, and hover-only behavior were tested live. | A real recording Start/Stop transition and C integration remain unvalidated. |
 | Excel playback | [Separate demo](TutorialAutomation/EXCEL_DEMO.md) supports fictional workbooks, formulas, and result checks. | Review what to reuse in the combined workflow; formula integration is unresolved. |
 
-## Session controller / RDP coordination
+## Roles: manager and bots
 
-Sources: O1, O2.
+Sources: O1, O2, and the project owner (2026-10-29).
 
-- [ ] Define the central controller and the RDP sessions it controls.
-- [ ] Assign a role and scenario configuration to each session; the original
-  drawing lists RDP 1, RDP 2, and RDP 3, with role labels still unresolved.
-- [ ] Define how the controller starts, stops, interrupts, and monitors workers.
-- [ ] Send worker status, current activity, and errors back to the controller.
-- [ ] Allow each worker to select a different combination of configured activities.
+The project has two roles:
+
+| Role | What it is | What it does |
+|---|---|---|
+| **Bot** | A Windows machine or RDP session where the automation runs (`tutorial.exe`, Loggy3, one profile). About 20 bots, each in its own RDP session. | Runs the work session for its profile, and reports to the manager: Loggy3 state and timer, today's recorded hours, current task, errors and alerts, and screenshots on request. Accepts commands from the manager. |
+| **Manager** | One separate place that oversees the bots. Nothing is automated on it. | Keeps the list of bots and which profile each runs. Asks any bot for a screenshot or its status, sees all bots at a glance, and sends commands (start a session, pause, resume, stop). Receives alerts. |
+
+Today each bot reports on its own through its Telegram monitor (`monitor.exe`), so only
+the bot side exists. The manager has not been introduced yet.
+
+- [ ] Define the manager: where it runs, how bots reach it, and how the two authenticate.
+- [ ] Keep a list of bots in the manager (name, machine or RDP session, profile, last seen).
+- [ ] Bots report status, current activity, and errors to the manager, and send a
+  screenshot when asked.
+- [ ] The manager starts, stops, pauses, resumes, and interrupts a bot's session.
+- [ ] Assign a profile and activity mix to each bot.
 
 ## Scenario profiles and shared playback settings
 
@@ -181,7 +191,7 @@ Sources: O2; shared by all application activities.
 - [ ] Define the proposed "Python eye" component and identify concrete gaps where
   accessibility does not expose a usable target.
 - [ ] Evaluate object detection or other visual targeting for those gaps; decide
-  whether a model is needed and whether it runs on the worker or controller.
+  whether a model is needed and whether it runs on the bot or the manager.
   This remains an experiment, not an assumed dependency.
 
 ## Error recovery and interruption
@@ -191,8 +201,8 @@ Sources: O2, N2, N3.
 - [ ] Detect when the intended application is no longer active or available.
 - [ ] Support Alt+Tab return to the target app, verifying its foreground state
   before resuming.
-- [ ] Define which errors permit recovery and which stop the worker; report
-  the error and worker state to the controller.
+- [ ] Define which errors permit recovery and which stop the bot; report
+  the error and bot state to the manager.
 - [ ] Define cursor behavior during recovery; the older note is unclear.
 - [ ] Keep activities interruptible, including typing, idle/pause intervals,
   app switching, recording transitions, and recovery waits.
@@ -204,7 +214,7 @@ rules. They are collected here rather than repeated as separate feature tasks.
 
 | Source | Open decision |
 |---|---|
-| O1 | RDP 1 appears labeled "record"; RDP 2 and RDP 3 are labeled "bot." Confirm each session's role. |
+| O1 | RDP 1 appears labeled "record"; RDP 2 and RDP 3 are labeled "bot." The roles are now manager and bot (see **Roles**). Confirm whether "record" in the drawing means the manager. |
 | O2 | Does the desktop grid specify an icon arrangement, activity groups, or both? The nearby block reads approximately "Start 5," "Key points," grid/x-y notation, and "random file..."; its full meaning is unclear. |
 | O2 | What should the cursor do while an error is handled? |
 | O3, N1 | The newer profile fields partly clarify "user identity based on scoring," but the score formula, inputs, and effect on randomness remain unspecified. |

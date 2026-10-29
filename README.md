@@ -11,6 +11,15 @@ and random seeds configure playback pacing and navigation choices. Source-code
 playback enters existing reference text through the editor and verifies saved
 contents; it does not generate new code.
 
+## Roles: manager and bots
+
+| Role | What it is |
+|---|---|
+| **Bot** | A machine or RDP session where the automation runs (`tutorial.exe`, Loggy3, one profile); about 20 of them. It runs the work session and reports status, alerts, and screenshots. |
+| **Manager** | One separate place that keeps the list of bots, asks each for a screenshot or status, and sends start, pause, resume, and stop. Not built yet: today each bot reports on its own through its Telegram monitor. |
+
+See [task.md](task.md) ("Roles: manager and bots") and Phase 8 in [TRACKER.md](TRACKER.md).
+
 ## Components and documentation
 
 | Component | Documentation | Status and behavior |

@@ -19,4 +19,6 @@ void typing_pace_configure(TypingPace *pace, unsigned char_min, unsigned char_ma
 void typing_pace_breaks(TypingPace *pace, unsigned after_min, unsigned after_max,
                         unsigned pause_min, unsigned pause_max);
 TypingDelay typing_pace_next(TypingPace *pace, wchar_t character);
+/* A neighbouring QWERTY key for a letter, keeping its case (0 for anything that is not a-z/A-Z). */
+wchar_t typing_typo_neighbor(wchar_t character, uint32_t roll);
 #endif

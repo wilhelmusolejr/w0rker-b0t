@@ -139,7 +139,7 @@ static int taskbar_launch_selected(const Playback *p) {
 }
 
 static int open_browser(Playback *p, const wchar_t *url, const wchar_t *program,
-                        const wchar_t *process, HWND *window) {
+                        const wchar_t *process, HWND *window, int taskbar) {
     BrowserWindows windows = {0};
     HWND previous = p->target;
     ULONGLONG started, paused;
@@ -147,7 +147,7 @@ static int open_browser(Playback *p, const wchar_t *url, const wchar_t *program,
     windows.process = process;
     EnumWindows(collect_browser, (LPARAM)&windows);
     if (windows.overflow) { playback_log(p, "too many browser windows to identify a new one safely"); return 0; }
-    if (taskbar_launch_selected(p)) {
+    if (taskbar) {
         via_taskbar = launch_from_taskbar(p, process, windows.count != 0);
         if (!via_taskbar) {
             if (InterlockedCompareExchange(&p->stopped, 0, 0)) return 0;
@@ -159,7 +159,7 @@ static int open_browser(Playback *p, const wchar_t *url, const wchar_t *program,
             if (!p->target) p->target = previous;
         }
     }
-    if (!via_taskbar && !launch_from_run(p, url, program)) return 0;
+    if (!via_taskbar && !launch_from_run(p, url ? url : L"https://www.google.com/", program)) return 0;
     windows.find_new = 1;
     started = GetTickCount64(); paused = p->paused_ms;
     while (GetTickCount64() - started - (p->paused_ms - paused) < 30000) {
@@ -176,7 +176,7 @@ static int open_browser(Playback *p, const wchar_t *url, const wchar_t *program,
                 if (!shortcut(p, VK_LWIN, VK_UP) || !playback_wait(p, 900) || !playback_guard(p)) return 0;
             }
             /* A taskbar launch opens the start page; type the destination like a person would. */
-            return !via_taskbar || navigate_browser(p, url);
+            return !via_taskbar || !url || navigate_browser(p, url);
         }
         if (windows.matches > 1) {
             playback_log(p, "more than one new browser window appeared; stopped for inspection"); return 0;
@@ -319,7 +319,7 @@ static int browser_visit(Playback *p, const wchar_t *query, const wchar_t *url,
             if (!window_activate_handle(p,*browser_window)) goto done;
         } else p->target = *browser_window;
         if (navigate_reused && !navigate_browser(p,initial_url)) goto done;
-    } else if (!open_browser(p,initial_url,program,process,browser_window)) goto done;
+    } else if (!open_browser(p,initial_url,program,process,browser_window,taskbar_launch_selected(p))) goto done;
     started = GetTickCount64(); paused = p->paused_ms;
     if (query && *query) {
         playback_log(p,"%s visit budget: %.1f seconds; searching Google",research ? "research" : "documentation",duration_ms/1000.0);
@@ -377,4 +377,14 @@ int browser_research_visit(Playback *p, const wchar_t *query, DWORD duration_ms,
 int browser_docs_visit(Playback *p, const wchar_t *query, const wchar_t *url,
                        DWORD duration_ms, uint32_t seed, HWND *browser_window) {
     return query && *query && browser_topic_visit(p,query,url,duration_ms,seed,browser_window);
+}
+int browser_open_window(Playback *p, const wchar_t *url, int via_taskbar, HWND *window) {
+    wchar_t program[MAX_PATH];
+    const wchar_t *process = NULL;
+    if (url && !browser_url_valid(url)) { playback_log(p,"browser URL must use HTTP or HTTPS"); return 0; }
+    if (!find_browser_program(program,&process)) {
+        playback_log(p,"Chrome or Edge was not found in a supported installation directory"); return 0;
+    }
+    if (*window && browser_window_is(*window,process)) return window_activate_handle(p,*window);
+    return open_browser(p,url,program,process,window,via_taskbar);
 }
