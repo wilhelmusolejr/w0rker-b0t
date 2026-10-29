@@ -28,7 +28,7 @@ The monitor never sends desktop input itself. It reads the playback log, takes s
 | `heartbeat_minutes` | Periodic status message; `0` = only on request (0-1440). |
 | `stall_minutes` | Alert when the playback log has not changed for this long (2-1440). |
 | `log_folder` | Where playback logs are read and `monitor.log` is written, relative to `notify.json`. |
-| `launcher` | The `.cmd` file that `/run` starts, relative to `notify.json`. It must exist. Use `../../start-class-demo.cmd` for the class demo. |
+| `launcher` | The `.cmd` file that `/start` runs, relative to `notify.json`. It must exist. `../../start-session.cmd` runs the recorded work day; `../../start-class-demo.cmd` the class demo. |
 
 `build/` is listed in `.gitignore`, so `notify.json` and its token are never committed.
 
@@ -42,7 +42,7 @@ The monitor never sends desktop input itself. It reads the playback log, takes s
 | `/pause` | Same as F8: pauses at the next safe point (after any held key is released) |
 | `/resume` | Continues a paused playback |
 | `/stop` | Same as F9: releases input and stops; no automatic restart |
-| `/run` | Starts the `launcher` from `notify.json` |
+| `/start` | Starts the `launcher` from `notify.json` (the work session: Loggy3 Start, work until today's target, Stop). `/run` still works the same. |
 
 Any other message returns the command list.
 
@@ -50,16 +50,16 @@ Any other message returns the command list.
 
 1. Make sure `monitor.exe` is running on the playback machine. It must be started **before** playback, or `/pause` and `/resume` cannot reach that run.
 2. Leave the desktop unlocked and untouched, with VS Code and Chrome not in the middle of a dialog.
-3. Send **`/run`**. The bot replies "Launcher started", and playback begins after the launcher's 10-second countdown.
+3. Send **`/start`**. The bot replies "Started", and playback begins after the launcher's 10-second countdown.
 4. After about a minute, send `/screenshot` or `/status` to confirm it is typing.
 
-`/run` refuses to start when playback is already running or when the desktop is locked or disconnected. It starts the launcher in its own console window, exactly like double-clicking the `.cmd`.
+`/start` refuses to start when playback is already running or when the desktop is locked or disconnected. It starts the launcher in its own console window, exactly like double-clicking the `.cmd`.
 
-To switch what `/run` starts (long reference job vs. class demo), change `launcher` in `notify.json` and restart `monitor.exe`.
+To switch what `/start` runs (long reference job vs. class demo), change `launcher` in `notify.json` and restart `monitor.exe`.
 
 ### Starting the monitor automatically at sign-in (optional)
 
-Press Win+R, type `shell:startup`, and create a shortcut to `build\monitor.exe` with **Start in** set to the `build` folder. The monitor then starts whenever you sign in, and `/run` is available without opening a terminal.
+Press Win+R, type `shell:startup`, and create a shortcut to `build\monitor.exe` with **Start in** set to the `build` folder. The monitor then starts whenever you sign in, and `/start` is available without opening a terminal.
 
 ## Alerts it sends without being asked
 

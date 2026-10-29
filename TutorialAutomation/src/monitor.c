@@ -531,8 +531,8 @@ static void run_launcher(char *reply, size_t capacity) {
         snprintf(reply, capacity, "Could not start the launcher (error %lu).", GetLastError()); return;
     }
     CloseHandle(process.hThread); CloseHandle(process.hProcess);
-    snprintf(reply, capacity, "Launcher started. Playback begins after its 10-second countdown; "
-        "keep the desktop untouched. Send /status in a minute.");
+    snprintf(reply, capacity, "Started. It begins after a 10-second countdown; a work session then starts the "
+        "Loggy3 recording and works until today's target. Send /status in a minute.");
 }
 static void handle_command(const char *chat, const char *text) {
     char command[32], reply[4000];
@@ -557,10 +557,11 @@ static void handle_command(const char *chat, const char *text) {
         else if (!signal_playback(name)) send_text("Playback is running but did not accept remote commands (restart it with the new build).");
         else send_text(command[1] == 'p' ? "Pause sent. Playback pauses at its next safe point; /resume continues." :
             command[1] == 'r' ? "Resume sent." : "Stop sent. A work session finishes its line, saves, runs its ending and stops the "
-            "Loggy3 recording; other playback releases input and stops at once. /run starts it again.");
-    } else if (!strcmp(command, "/run")) { run_launcher(reply, sizeof(reply)); send_text(reply); }
+            "Loggy3 recording; other playback releases input and stops at once. /start starts it again.");
+    } else if (!strcmp(command, "/start") || !strcmp(command, "/run")) { run_launcher(reply, sizeof(reply)); send_text(reply); }
     else send_text("Commands:\n/status - progress and state\n/screenshot - picture of the desktop\n/log - recent log lines\n"
-        "/pause, /resume - like F8\n/stop - like F9 (no auto-restart)\n/run - start the reference launcher");
+        "/start - start the day (the launcher in notify.json: the work session)\n"
+        "/pause, /resume - like F8 (Loggy3 keeps recording)\n/stop - end the day: finish the line, save, stop recording");
 }
 /* Pulls the next "key":"value" string or number after a position in Telegram's compact JSON. */
 static const char *json_text_after(const char *at, const char *key, const char *limit, char *out, size_t capacity) {
@@ -704,8 +705,8 @@ int main(void) {
         if (!was_running && running) stop_reported = 0;
         if (kind == 3) {
             stop_reported = 2;
-            stop_alert(was_running ? "Playback ENDED: the automatic restart failed. Fix the cause, then send /run."
-                                   : "Playback did not start: the startup check failed. Fix the cause, then send /run.");
+            stop_alert(was_running ? "Playback ENDED: the automatic restart failed. Fix the cause, then send /start."
+                                   : "Playback did not start: the startup check failed. Fix the cause, then send /start.");
         } else if (kind == 2) {
             stop_reported = running ? 1 : 2;
             stop_alert(running ? "Playback STOPPED. An automatic restart may follow."
@@ -717,7 +718,7 @@ int main(void) {
             if (!stop_reported) state.reason[0] = 0;
             LeaveCriticalSection(&state_lock);
             stop_reported = 2;
-            stop_alert("tutorial.exe is no longer running. Send /run to resume.");
+            stop_alert("tutorial.exe is no longer running. Send /start to resume.");
         }
         if (was_desktop && !desktop) send_text("ALERT: the desktop became locked or disconnected. Playback cannot continue until it is unlocked.");
         else if (!was_desktop && desktop) send_text("The desktop is unlocked again.");
