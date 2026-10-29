@@ -78,3 +78,22 @@ Press Win+R, type `shell:startup`, and create a shortcut to `build\monitor.exe` 
 | "Playback is running but did not accept remote commands" | Playback was started before the monitor or with an old build. Stop it with F9 and start again. |
 
 Check screen capture locally without sending anything: `monitor.exe --screenshot test.jpg`. The monitor's own log is `logs\monitor.log`.
+
+## One-time setup on each bot: `setup-bot.cmd`
+
+Run `setup-bot.cmd` from the repository root once, and accept the administrator prompt. It sets up:
+
+- **A scheduled task** `\TutorialAutomation\SwitchToConsole` that runs `switch-to-console.cmd --quiet`
+  with administrator rights, so nothing has to be clicked later.
+- **A Startup shortcut** to `start-monitor.cmd`, so the monitor runs whenever you sign in. Only one
+  monitor runs at a time.
+
+With that in place, `/start` first checks the session:
+
+- **Through Remote Desktop, or disconnected or locked:** it runs the task. The session moves to the
+  console and stays unlocked, and the resolution watcher keeps it at 1920x1080. An open RDP window
+  closes; reconnect with RDP or RustDesk later. The bot says so in Telegram.
+- **Already on the console:** nothing changes.
+
+Then it starts the launcher as before. Without the setup, `/start` still works on an unlocked
+desktop, and says to run `setup-bot.cmd` when it would have needed the switch.

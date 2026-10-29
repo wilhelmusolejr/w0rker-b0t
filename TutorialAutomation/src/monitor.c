@@ -520,12 +520,49 @@ static int signal_playback(const wchar_t *name) {
     if (event) CloseHandle(event);
     return ok;
 }
+/* Through Remote Desktop, or with the session disconnected, the desktop locks as soon as the RDP
+   window closes and playback cannot continue. The scheduled task from setup-bot.cmd runs
+   switch-to-console.cmd as administrator (no prompt): the session moves to the console and stays
+   unlocked, and the resolution watcher starts. Returns 1 when the desktop is ready afterwards. */
+static int switch_to_console(char *note, size_t capacity) {
+    wchar_t command[] = L"schtasks.exe /run /tn \"\\TutorialAutomation\\SwitchToConsole\"";
+    STARTUPINFOW startup = {sizeof(startup)};
+    PROCESS_INFORMATION process;
+    DWORD code = 1;
+    unsigned waited;
+    *note = 0;
+    if (!GetSystemMetrics(SM_REMOTESESSION) && window_desktop_ready()) return 1;
+    if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &startup, &process)) {
+        snprintf(note, capacity, "Could not run schtasks (error %lu).", GetLastError());
+        return window_desktop_ready();
+    }
+    WaitForSingleObject(process.hProcess, 15000);
+    GetExitCodeProcess(process.hProcess, &code);
+    CloseHandle(process.hThread); CloseHandle(process.hProcess);
+    if (code) {
+        snprintf(note, capacity, "The switch-to-console task is not set up: run setup-bot.cmd once on this machine.");
+        return window_desktop_ready();
+    }
+    send_text("Moving this session to the console so the desktop stays unlocked (an open RDP window closes).");
+    for (waited = 0; waited < 40 && (GetSystemMetrics(SM_REMOTESESSION) || !window_desktop_ready()); ++waited) Sleep(1000);
+    if (GetSystemMetrics(SM_REMOTESESSION) || !window_desktop_ready()) {
+        snprintf(note, capacity, "The session did not reach the console within 40 s.");
+        return window_desktop_ready();
+    }
+    snprintf(note, capacity, "The session is on the console now; the resolution watcher is running.");
+    Sleep(3000); /* let the display settle at 1920x1080 */
+    return 1;
+}
 static void run_launcher(char *reply, size_t capacity) {
     wchar_t command[MAX_PATH * 2 + 32];
     STARTUPINFOW startup = {sizeof(startup)};
     PROCESS_INFORMATION process;
+    char console[200];
     if (tutorial_running()) { snprintf(reply, capacity, "Playback is already running."); return; }
-    if (!window_desktop_ready()) { snprintf(reply, capacity, "Not started: the desktop is locked or disconnected."); return; }
+    if (!switch_to_console(console, sizeof(console))) {
+        snprintf(reply, capacity, "Not started: the desktop is locked or disconnected. %s", console); return;
+    }
+    if (*console) send_text(console);
     swprintf(command, sizeof(command) / sizeof(*command), L"cmd.exe /c \"\"%ls\"\"", cfg.launcher);
     if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, cfg.root, &startup, &process)) {
         snprintf(reply, capacity, "Could not start the launcher (error %lu).", GetLastError()); return;

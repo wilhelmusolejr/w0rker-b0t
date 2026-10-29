@@ -20,6 +20,11 @@ contents; it does not generate new code.
 
 See [task.md](task.md) ("Roles: manager and bots") and Phase 8 in [TRACKER.md](TRACKER.md).
 
+**Setting up a bot:** build `TutorialAutomation`, put the Telegram token in `build\notify.json`, and run
+`setup-bot.cmd` once (administrator prompt). Then Telegram `/start` moves the session to the console if
+needed and runs the recorded work day (`start-session.cmd`); `/stop` ends it. See
+[TELEGRAM.md](TutorialAutomation/TELEGRAM.md).
+
 ## Components and documentation
 
 | Component | Documentation | Status and behavior |
