@@ -59,6 +59,7 @@ One launcher runs a whole recorded day: `start-session.cmd [PROFILE]`, then `swi
 - Telegram stop: finish the current line, save, then end.
 - Loggy3 stops by itself: auto-recover (click Start again, alert on Telegram).
 - Launched when today is already close to the target: record only what remains.
+- Crossing Loggy3's day boundary (00:00 UTC, 8 AM for the owner): keep going until the target. The session counts from its launch snapshot; Loggy3 splits the hours between its two days (confirmed 2026-10-29).
 - Telegram summary at the end: yes.
 - Start and end looks are randomized so days don't look alike. All percentages below are placeholders for the config discussion (D4).
 
