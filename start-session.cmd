@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 if not exist "%~dp0TutorialAutomation\build\tutorial.exe" (
     echo Build tutorial.exe first. See TutorialAutomation\README.md.
-    pause
+    if not defined TUTORIAL_BACKGROUND pause
     exit /b 2
 )
 rem Usage: start-session.cmd [PROFILE_ID] [more options]
@@ -20,5 +20,5 @@ if not "%~1"=="" shift
 set "session_result=%errorlevel%"
 echo.
 echo Session exited with code %session_result%.
-pause
+if not defined TUTORIAL_BACKGROUND pause
 exit /b %session_result%

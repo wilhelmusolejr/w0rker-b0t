@@ -553,6 +553,30 @@ static int switch_to_console(char *note, size_t capacity) {
     Sleep(3000); /* let the display settle at 1920x1080 */
     return 1;
 }
+static int process_running(const wchar_t *name) {
+    PROCESSENTRY32W entry = {sizeof(entry)};
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    int found = 0;
+    if (snapshot == INVALID_HANDLE_VALUE) return 0;
+    if (Process32FirstW(snapshot, &entry))
+        do found |= !_wcsicmp(entry.szExeFile, name); while (!found && Process32NextW(snapshot, &entry));
+    CloseHandle(snapshot);
+    return found;
+}
+/* The resolution watcher keeps the console display at 1920x1080 (switch-to-console starts it too);
+   started here, with no window, whenever it is not already running. */
+static void ensure_resolution_watch(void) {
+    wchar_t command[MAX_PATH * 3];
+    STARTUPINFOW startup = {sizeof(startup)};
+    PROCESS_INFORMATION process;
+    if (process_running(L"set_resolution.exe")) return;
+    swprintf(command, sizeof(command) / sizeof(*command), L"\"%ls\\set_resolution.exe\" 1920 1080 --watch --log \"%ls\\resolution.log\"",
+        cfg.root, cfg.logs);
+    if (CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, cfg.root, &startup, &process)) {
+        CloseHandle(process.hThread); CloseHandle(process.hProcess);
+        note("started the resolution watcher");
+    } else note("could not start the resolution watcher (error %lu)", GetLastError());
+}
 static void run_launcher(char *reply, size_t capacity) {
     wchar_t command[MAX_PATH * 2 + 32];
     STARTUPINFOW startup = {sizeof(startup)};
@@ -563,8 +587,12 @@ static void run_launcher(char *reply, size_t capacity) {
         snprintf(reply, capacity, "Not started: the desktop is locked or disconnected. %s", console); return;
     }
     if (*console) send_text(console);
+    ensure_resolution_watch();
+    /* No window and no taskbar button: the launcher sees TUTORIAL_BACKGROUND and does not wait for a key
+       at the end. Its progress is in logs\ and on Telegram; F8/F9/F12 and /pause /stop still work. */
+    SetEnvironmentVariableW(L"TUTORIAL_BACKGROUND", L"1");
     swprintf(command, sizeof(command) / sizeof(*command), L"cmd.exe /c \"\"%ls\"\"", cfg.launcher);
-    if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, cfg.root, &startup, &process)) {
+    if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, cfg.root, &startup, &process)) {
         snprintf(reply, capacity, "Could not start the launcher (error %lu).", GetLastError()); return;
     }
     CloseHandle(process.hThread); CloseHandle(process.hProcess);

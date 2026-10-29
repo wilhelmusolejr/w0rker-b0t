@@ -28,4 +28,5 @@ rem The console's own display is 640x480 on this VM. Keep it at the RDP layout f
 rem the watcher plugs in its own virtual monitor if needed and re-applies 1920x1080 whenever it
 rem drifts, e.g. when RustDesk disconnects. Only one watcher runs at a time.
 if not exist "%~dp0logs" mkdir "%~dp0logs"
-start "Resolution watch" /min "%~dp0TutorialAutomation\build\set_resolution.exe" 1920 1080 --watch --log "%~dp0logs\resolution.log"
+rem Started with no window, so nothing shows on the taskbar.
+powershell -NoProfile -Command "Start-Process -WindowStyle Hidden -FilePath '%~dp0TutorialAutomation\build\set_resolution.exe' -ArgumentList '1920','1080','--watch','--log','\"%~dp0logs\resolution.log\"'"

@@ -8,7 +8,8 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $switch = Join-Path $root 'switch-to-console.cmd'
 $monitor = Join-Path $root 'start-monitor.cmd'
 
-$action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c `"`"$switch`" --quiet`"" -WorkingDirectory $root
+# conhost --headless: the task runs without a console window.
+$action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless cmd.exe /c `"`"$switch`" --quiet`"" -WorkingDirectory $root
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
 Register-ScheduledTask -TaskPath '\TutorialAutomation\' -TaskName 'SwitchToConsole' -Action $action -Principal $principal -Settings $settings -Force | Out-Null
@@ -17,8 +18,9 @@ Write-Host "Scheduled task \TutorialAutomation\SwitchToConsole is ready (runs sw
 $startup = [Environment]::GetFolderPath('Startup')
 $shell = New-Object -ComObject WScript.Shell
 $link = $shell.CreateShortcut((Join-Path $startup 'TutorialAutomation monitor.lnk'))
-$link.TargetPath = $monitor
+$link.TargetPath = 'conhost.exe'
+$link.Arguments = "--headless cmd.exe /c `"`"$monitor`"`""
 $link.WorkingDirectory = $root
-$link.WindowStyle = 7   # minimized
+$link.WindowStyle = 7   # minimized (conhost --headless shows no window anyway)
 $link.Save()
 Write-Host "The Telegram monitor now starts at sign-in (shortcut in $startup)."
