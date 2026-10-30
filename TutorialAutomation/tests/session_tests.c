@@ -24,6 +24,8 @@ static void shipped_tests(const wchar_t *path) {
     CHECK(c.target_minutes[0] == 615 && c.target_minutes[1] == 645);
     CHECK(c.coding_minutes[0] == 40 && c.coding_minutes[1] == 80 && c.browsing_minutes[0] == 10 && c.browsing_minutes[1] == 20);
     CHECK(c.break_minutes[0] == 5 && c.break_minutes[1] == 20);
+    CHECK(c.idle_percent == 10 && c.idle_minutes[0] == 1 && c.idle_minutes[1] == 1);
+    CHECK(c.idle_check_minutes[0] == 5 && c.idle_check_minutes[1] == 10);
     /* The same seed plans the same day; a dry run shows what a live run does. */
     session_plan(&c, 42, 0, 35, &a); session_plan(&c, 42, 0, 35, &b);
     CHECK(!memcmp(&a, &b, sizeof(a)));
@@ -44,17 +46,17 @@ static void shipped_tests(const wchar_t *path) {
             total += s->minutes * 60;
         }
         CHECK(total >= a.target_seconds);
-        /* Idles: 1-6 min each, in order, before the end of the day. */
+        /* Idles: one minute each, in order, before the end of the day. */
         for (i = 0; i < a.idle_count; ++i) {
-            CHECK(a.idles[i].seconds >= 60 && a.idles[i].seconds <= 360);
+            CHECK(a.idles[i].seconds == 60);
             CHECK(a.idles[i].at < a.target_seconds);
-            if (i) CHECK(a.idles[i].at >= a.idles[i - 1].at + a.idles[i - 1].seconds + 20 * 60);
+            if (i) CHECK(a.idles[i].at >= a.idles[i - 1].at + a.idles[i - 1].seconds + 5 * 60);
             idle_total += a.idles[i].seconds;
         }
         day_total += a.target_seconds;
     }
-    /* About 5% of the day idling (profile randomness 35 scales it by 0.94). */
-    CHECK(idle_total * 1000 / day_total > 35 && idle_total * 1000 / day_total < 62);
+    /* About 10% of the day idling (profile randomness 35 scales it by 0.94). */
+    CHECK(idle_total * 1000 / day_total > 75 && idle_total * 1000 / day_total < 115);
     { unsigned calm = 0, random = 0;
       for (seed = 1; seed <= 200; ++seed) {
           session_plan(&c, seed, 0, 0, &a); for (i = 0; i < a.idle_count; ++i) calm += a.idles[i].seconds;

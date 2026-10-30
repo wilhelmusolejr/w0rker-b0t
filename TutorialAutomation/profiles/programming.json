@@ -18,7 +18,7 @@
         "mouse_move_ms": [900, 1600]
     },
     "checkpoint_seconds": 45,
-    "idle_percent": 12,
-    "idle_seconds": [8, 40],
+    "idle_percent": 10,
+    "idle_seconds": [60, 60],
     "mouse_wander_percent": 25
 }

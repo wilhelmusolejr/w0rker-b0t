@@ -169,7 +169,10 @@ void session_plan(const SessionConfig *c, uint32_t seed, unsigned recorded, unsi
        takes about idle_percent of the day (a little more for a more random profile). */
     share = c->idle_percent / 100.0 * (0.8 + 0.4 * (randomness > 100 ? 100 : randomness) / 100.0);
     mean_check = (c->idle_check_minutes[0] + c->idle_check_minutes[1]) * 30.0;
-    mean_idle = (c->idle_minutes[0] + c->idle_minutes[1]) * 30.0 + 29.5;
+    /* The largest chosen minute value is capped before its random seconds are added. */
+    mean_idle = (c->idle_minutes[0] + c->idle_minutes[1]) * 30.0 +
+        29.5 * (c->idle_minutes[1] - c->idle_minutes[0]) /
+        (c->idle_minutes[1] - c->idle_minutes[0] + 1);
     /* Share = chance * idle / (check + chance * idle), solved for the chance. */
     chance = share > 0 && share < 1 ? (unsigned)(share * mean_check / (mean_idle * (1 - share)) * 100 + 0.5) : 0;
     if (chance > 100) chance = 100;

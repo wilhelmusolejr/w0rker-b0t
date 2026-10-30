@@ -28,6 +28,8 @@ Each profile has two independent 1–10 controls in [profiles/profiles.json](pro
 
 `mistype_level` 5 means an ordinary amount of visible corrections; it does not mean 50% of letters are wrong. The implementation maps level 1–10 to a 2–20% chance that an eligible letter is first typed as a neighbouring key and immediately corrected (level 5: 10%). This is an approximation chosen to produce roughly the [6.3% correction-key frequency observed in the study](https://userinterfaces.aalto.fi/136Mkeystrokes/resources/chi-18-analysis.pdf) for text with about 70% eligible letters. The final saved text is still checked against the reference. `mistype_level` is the only mistake setting in each profile.
 
+Idle settings are shared by profiles. [profiles/session.json](profiles/session.json) targets about 10% of a recorded work session as one-minute idles; it considers another idle after 5–10 minutes. The session planner adjusts the chance at each check to approach that time share, and Loggy3 keeps recording during an idle. [profiles/programming.json](profiles/programming.json) gives standalone `--code` runs a 10% chance of a one-minute idle after a coding checkpoint. The work session uses only its session idles, so coding checkpoints do not add a second idle schedule on top.
+
 **Project list:** [profiles/projects.json](profiles/projects.json) lists the GitHub projects, each pinned to a full 40-character commit id so the reference never changes under a half-typed file:
 
 ```json

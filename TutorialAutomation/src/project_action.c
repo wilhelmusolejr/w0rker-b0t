@@ -194,7 +194,8 @@ static int wander(Playback *p, MotionRng *rng) {
 }
 static int checkpoint_break(Playback *p, const ProgrammingConfig *c, MotionRng *rng) {
     if (motion_chance(rng, c->wander_percent) && !wander(p, rng)) return 0;
-    if (motion_chance(rng, c->idle_percent)) {
+    /* A full work session uses its own scheduled idles to control the day's idle share. */
+    if (!p->work_session && motion_chance(rng, c->idle_percent)) {
         unsigned seconds = motion_between(rng, c->idle_seconds[0], c->idle_seconds[1]);
         playback_log(p, "random idle: %u seconds with no input", seconds);
         if (!playback_wait(p, seconds * 1000)) return 0;
