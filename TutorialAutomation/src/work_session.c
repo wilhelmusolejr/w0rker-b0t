@@ -276,6 +276,15 @@ static void watch(Playback *p) {
     state = loggy_recording_state(&s, NULL);
     if (state == LOGGY_RECORDING) {
         long timer = loggy_timer_seconds(s.timer);
+        /* Loggy3 sometimes starts a new recording part while it keeps recording: the timer goes back
+           to zero and the earlier part moves into the day's total. Bank it, or the day would come up short. */
+        if (timer >= 0 && timer + 5 < r->last_timer) {
+            char text[32];
+            r->banked += r->last_timer;
+            hms(recorded(r) + timer, text, sizeof(text));
+            playback_log(p, "Loggy3's timer restarted at %s (was %lds); counting the earlier part, today %s",
+                s.timer, r->last_timer, text);
+        }
         if (timer >= 0) r->last_timer = timer;
         r->stopped_seen = 0;
     } else if (state == LOGGY_STOPPED && ++r->stopped_seen >= 2 && !r->loggy_lost) {
@@ -370,7 +379,8 @@ static int coding_slot(Run *r, int open_only) {
         memset(&reference, 0, sizeof(reference)); memset(&plan, 0, sizeof(plan)); memset(&job, 0, sizeof(job));
         if (!project_select(r->s->programming, r->s->manifest, r->s->profile, &r->history, 1, &reference, &started,
                 destination, error, sizeof(error))) {
-            playback_log(p, "no coding project to work on: %s; browsing instead from now on", error);
+            playback_log(p, "SESSION ALERT: no coding project to work on (%s); browsing instead from now on. "
+                "Add projects to profiles\\projects.json", error);
             r->coding_done = 1; project_reference_free(&reference); return 2;
         }
         if (!project_plan_build(&reference, started, destination, &plan, error, sizeof(error)) || plan.conflicts) {
@@ -712,7 +722,14 @@ int work_session_run(Playback *p, WorkSession *s) {
         p->deadline = GetTickCount64() + slot.minutes * 60000ULL;
         task(r, slot.coding ? "coding" : "browsing", slot.minutes);
         result = slot.coding ? coding_slot(r, 0) : browsing_slot(r, slot.minutes, 0);
-        if (slot.coding && result == 2) result = browsing_slot(r, slot.minutes, 0);
+        if (slot.coding && result == 2) {
+            /* No coding left: the rest of this slot is browsing, and counts as browsing. */
+            ULONGLONG now = GetTickCount64();
+            unsigned left = p->deadline > now ? (unsigned)((p->deadline - now + 59999) / 60000) : 1;
+            r->coding_ms += now - started; started = now; slot.coding = 0;
+            task(r, "browsing", left);
+            result = browsing_slot(r, left, 0);
+        }
         p->deadline = 0;
         if (slot.coding) r->coding_ms += GetTickCount64() - started; else r->browsing_ms += GetTickCount64() - started;
         if (result) { r->failures = 0; continue; }
