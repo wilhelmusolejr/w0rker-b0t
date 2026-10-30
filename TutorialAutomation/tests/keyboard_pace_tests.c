@@ -74,6 +74,10 @@ int main(void) {
     CHECK(waits[3] >= 900 && waits[3] <= 2200);
     CHECK(waits[4] >= 140 && waits[4] <= 300);
     CHECK(events[0].ki.wScan == L'a' && events[4].ki.wScan == L'b');
+    reset(&p); p.action_pace.enabled = 0; p.typing_speed = 4;
+    typing_pace_configure(&p.typing_pace, 185, 185, 600, 600, 42);
+    CHECK(keyboard_type(&p, L"ab"));
+    CHECK(wait_calls == 2 && waits[0] == 261 && waits[1] == 261);
     { size_t consumed = 99;
       reset(&p); p.action_pace.enabled = 0;
       CHECK(keyboard_type_slice(&p,L"a\r\n\xd83d\xde00",NULL,60000,&consumed));

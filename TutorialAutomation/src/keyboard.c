@@ -1,5 +1,11 @@
 #include "keyboard.h"
 
+static DWORD profile_typing_delay(const Playback *p, DWORD delay_ms) {
+    unsigned base = p->typing_pace.enabled ?
+        (p->typing_pace.char_min_ms + p->typing_pace.char_max_ms) / 2 : p->char_ms;
+    return typing_speed_delay(delay_ms, base, p->typing_speed);
+}
+
 static DWORD extended(WORD key) {
     switch (key) {
         case VK_LEFT: case VK_RIGHT: case VK_UP: case VK_DOWN: case VK_HOME:
@@ -97,8 +103,8 @@ static int typo(Playback *p, wchar_t ch) {
     p->typo_state = value;
     if ((value >> 8) % 100 >= p->typo_percent || !(wrong = typing_typo_neighbor(ch, value >> 20))) return 1;
     ++p->typos;
-    return send_unicode(p, wrong) && playback_wait(p, 140 + (value >> 4) % 420) &&
-        keyboard_press(p, VK_BACK) && playback_wait(p, 60 + (value >> 12) % 160);
+    return send_unicode(p, wrong) && playback_wait(p, profile_typing_delay(p, 140 + (value >> 4) % 420)) &&
+        keyboard_press(p, VK_BACK) && playback_wait(p, profile_typing_delay(p, 60 + (value >> 12) % 160));
 }
 static int type_text(Playback *p, const wchar_t *text, const wchar_t *document, DWORD budget_ms,
                      size_t *consumed) {
@@ -134,13 +140,13 @@ static int type_text(Playback *p, const wchar_t *text, const wchar_t *document, 
         }
         if (p->typing_pace.enabled) {
             TypingDelay delay = typing_pace_next(&p->typing_pace, ch);
-            if (!playback_wait(p, (DWORD)delay.delay_ms)) return 0;
+            if (!playback_wait(p, profile_typing_delay(p, (DWORD)delay.delay_ms))) return 0;
             if (delay.break_ms) {
                 playback_log(p, "presentation pause: %.1f seconds; F8 pause/resume, F12 stop",
                     delay.break_ms / 1000.0);
                 if (!playback_wait(p, (DWORD)delay.break_ms)) return 0;
             }
-        } else if (!playback_wait(p, ch == L'\n' ? p->line_ms : p->char_ms)) return 0;
+        } else if (!playback_wait(p, profile_typing_delay(p, ch == L'\n' ? p->line_ms : p->char_ms))) return 0;
         if (consumed) *consumed = i+1;
         if (budget_ms && GetTickCount64()-start-(p->paused_ms-paused) >= budget_ms) return 1;
     }

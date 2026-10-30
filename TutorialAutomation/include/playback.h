@@ -17,6 +17,8 @@ typedef struct Playback {
     int pause_deferred; /* pause requested while input was held; starts after the release */
     DWORD char_ms, line_ms;
     TypingPace typing_pace;
+    /* 0 means no profile is attached; 1-10 follows the profile's typing_speed. */
+    unsigned typing_speed;
     /* Percentage of letters first typed as a neighbouring key, then erased and corrected. */
     unsigned typo_percent, typos;
     uint32_t typo_state;

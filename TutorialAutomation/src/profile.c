@@ -70,12 +70,12 @@ static int strings(const JsonValue *v, wchar_t **out, size_t *count, int require
 static int load_one(const JsonValue *v, Profile *p, size_t index, char *error, size_t cap) {
     static const wchar_t *const keys[] = {
         L"id", L"local_id", L"name", L"gender", L"occupation", L"computer_name", L"main_task",
-        L"side_tasks", L"interests", L"hobbies", L"randomness_score", L"typo_percent", L"project_path"
+        L"side_tasks", L"interests", L"hobbies", L"randomness_score", L"mistype_level", L"typing_speed", L"project_path"
     };
     const JsonValue *id = json_get(v, L"id"), *local = json_get(v, L"local_id"), *name = json_get(v, L"name");
     const JsonValue *occupation = json_get(v, L"occupation"), *computer = json_get(v, L"computer_name");
     const JsonValue *side = json_get(v, L"side_tasks"), *score = json_get(v, L"randomness_score");
-    const JsonValue *typo = json_get(v, L"typo_percent"), *item;
+    const JsonValue *mistype = json_get(v, L"mistype_level"), *item;
     int gender = lookup(json_get(v, L"gender"), gender_names, PROFILE_GENDER_COUNT);
     int main_task = lookup(json_get(v, L"main_task"), task_names, PROFILE_TASK_COUNT);
     if (!v || v->kind != JSON_OBJECT || !json_keys(v, keys, sizeof(keys)/sizeof(*keys)))
@@ -113,9 +113,14 @@ static int load_one(const JsonValue *v, Profile *p, size_t index, char *error, s
         return fail_at(error, cap, index, "hobbies must list up to 32 distinct entries of up to 60 characters");
     if (!score || score->kind != JSON_NUMBER || score->number > 100)
         return fail_at(error, cap, index, "randomness_score must be an integer from 0 to 100");
-    if (!typo || typo->kind != JSON_NUMBER || typo->number > 20)
-        return fail_at(error, cap, index, "typo_percent must be an integer from 0 to 20");
-    p->randomness_score = score->number; p->typo_percent = typo->number;
+    if (!mistype || mistype->kind != JSON_NUMBER || mistype->number < 1 || mistype->number > 10)
+        return fail_at(error, cap, index, "mistype_level must be an integer from 1 to 10");
+    p->randomness_score = score->number; p->mistype_level = mistype->number;
+    { const JsonValue *speed = json_get(v, L"typing_speed");
+      if (speed && (speed->kind != JSON_NUMBER || speed->number < 1 || speed->number > 10))
+          return fail_at(error, cap, index, "typing_speed must be an integer from 1 to 10");
+      p->typing_speed = speed ? speed->number : 5;
+    }
     { const JsonValue *path = json_get(v, L"project_path");
       if (path) {
           if (!plain_text(path, 200) || !project_path_valid(path->string))
@@ -180,6 +185,9 @@ const Profile *profile_find(const ProfileSet *set, unsigned id) {
     size_t i;
     for (i = 0; set && i < set->count; ++i) if (set->items[i].id == id) return &set->items[i];
     return NULL;
+}
+unsigned profile_mistype_percent(const Profile *profile) {
+    return profile ? profile->mistype_level * 2 : 0;
 }
 const char *profile_task_name(ProfileTask task) {
     static const char *const names[PROFILE_TASK_COUNT] = {

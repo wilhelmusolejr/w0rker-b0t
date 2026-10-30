@@ -35,8 +35,10 @@ void coding_project_print(const CodingProject *j) {
     const ProjectReference *r = j->reference;
     char text[3 * MAX_PATH];
     size_t i, typed = 0, copied = 0;
-    double average_ms = (j->config->char_ms[0] + j->config->char_ms[1]) / 2.0;
-    utf8(j->profile->name, text, sizeof(text)); printf("Profile: %s (typo %u%%)\n", text, j->profile->typo_percent);
+    unsigned base_char_ms = (j->config->char_ms[0] + j->config->char_ms[1]) / 2;
+    double average_ms = typing_speed_delay(base_char_ms, base_char_ms, j->profile->typing_speed);
+    utf8(j->profile->name, text, sizeof(text));
+    printf("Profile: %s (typing speed %u, mistype level %u)\n", text, j->profile->typing_speed, j->profile->mistype_level);
     utf8(r->name, text, sizeof(text)); printf("Reference project: %s (%zu files, %zu folders)\n", text, r->file_count, r->folder_count);
     utf8(plan->destination, text, sizeof(text));
     printf("Project folder: %s%s\n", text, plan->fresh ? " (will be created)" : plan->history ? " (continuing)" : "");
@@ -336,6 +338,7 @@ int coding_project_run(Playback *p, CodingProject *j) {
     SideAppsTimer timer;
     HWND editor = NULL;
     size_t i;
+    p->typing_speed = j->profile->typing_speed;
     if (plan->conflicts) { playback_log(p, "the project has conflicts; run --dry-run-code to see them"); return 0; }
     if (!plan->remaining_files) {
         playback_log(p, "every file is already complete");
@@ -345,7 +348,7 @@ int coding_project_run(Playback *p, CodingProject *j) {
         action_pace_configure(&p->action_pace, c->action_pause_ms[0], c->action_pause_ms[1], c->mouse_move_ms[0], c->mouse_move_ms[1], j->seed);
         typing_pace_configure(&p->typing_pace, c->char_ms[0], c->char_ms[1], c->newline_ms[0], c->newline_ms[1], j->seed + 1);
         typing_pace_breaks(&p->typing_pace, c->pause_every_chars[0], c->pause_every_chars[1], c->pause_ms[0], c->pause_ms[1]);
-        p->typo_percent = j->profile->typo_percent;
+        p->typo_percent = profile_mistype_percent(j->profile);
         p->typo_state = j->seed ^ 0x9e3779b9u;
         motion_hand_for(&p->hand, motion_hash(j->profile->local_id), j->profile->randomness_score);
         /* Side-app breaks count main-task time from here. */

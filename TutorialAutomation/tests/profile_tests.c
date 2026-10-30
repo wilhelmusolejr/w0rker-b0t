@@ -10,7 +10,7 @@ static int checks, failures;
 static const wchar_t *const base[][2] = {
     {L"id", L"1"}, {L"local_id", L"\"A-1\""}, {L"name", L"\"Ann\""}, {L"gender", L"\"female\""},
     {L"occupation", L"\"Programmer\""}, {L"computer_name", L"\"ANN-PC\""}, {L"main_task", L"\"programming\""},
-    {L"interests", L"[\"baking\"]"}, {L"randomness_score", L"50"}, {L"typo_percent", L"2"}
+    {L"interests", L"[\"baking\"]"}, {L"randomness_score", L"50"}, {L"mistype_level", L"5"}
 };
 #define BASE_COUNT (sizeof(base)/sizeof(*base))
 /* value NULL removes key; an unknown key is appended. */
@@ -37,6 +37,7 @@ static void field_tests(void) {
     ProfileSet set;
     char error[256];
     CHECK(parses_with(NULL, NULL));
+    CHECK(parses_with(L"typing_speed", L"4"));
     CHECK(parses_with(L"side_tasks", L"[\"browser\",\"excel\"]"));
     CHECK(parses_with(L"hobbies", L"[\"yoga\"]"));
     CHECK(!parses_with(L"side_tasks", L"[\"programming\"]"));
@@ -46,7 +47,8 @@ static void field_tests(void) {
     CHECK(!parses_with(L"hobbies", L"[\"\"]"));
     CHECK(!parses_with(L"unknown_field", L"1"));
     CHECK(!parses_with(L"interests", NULL));
-    CHECK(!parses_with(L"typo_percent", NULL));
+    CHECK(!parses_with(L"mistype_level", NULL));
+    CHECK(!parses_with(L"typo_percent", L"5"));
     CHECK(!profile_parse(L"{\"version\":2,\"profiles\":[]}", &set, error, sizeof(error)));
     CHECK(!profile_parse(L"{\"version\":1,\"profiles\":[]}", &set, error, sizeof(error)));
     CHECK(!profile_parse(L"{\"version\":1,\"profiles\":[{\"id\":1}]}", &set, error, sizeof(error)));
@@ -57,7 +59,9 @@ static void value_tests(void) {
         {L"id", L"0"}, {L"local_id", L"\"has space\""}, {L"gender", L"\"other\""}, {L"name", L"\"\""},
         {L"computer_name", L"\"THIS-NAME-IS-TOO-LONG\""}, {L"computer_name", L"\"12345\""},
         {L"computer_name", L"\"-PC\""}, {L"computer_name", L"\"PC_1\""}, {L"main_task", L"\"gaming\""},
-        {L"randomness_score", L"101"}, {L"typo_percent", L"21"}, {L"interests", L"[]"}
+        {L"randomness_score", L"101"}, {L"mistype_level", L"0"}, {L"mistype_level", L"11"},
+        {L"mistype_level", L"5.5"}, {L"interests", L"[]"},
+        {L"typing_speed", L"0"}, {L"typing_speed", L"11"}, {L"typing_speed", L"4.5"}
     };
     size_t i;
     for (i = 0; i < sizeof(bad)/sizeof(*bad); ++i) {
@@ -65,12 +69,17 @@ static void value_tests(void) {
         CHECK(!ok);
         if (ok) fprintf(stderr, "  accepted %ls=%ls\n", bad[i][0], bad[i][1]);
     }
+    { Profile p = {0};
+      p.mistype_level = 1; CHECK(profile_mistype_percent(&p) == 2);
+      p.mistype_level = 5; CHECK(profile_mistype_percent(&p) == 10);
+      p.mistype_level = 10; CHECK(profile_mistype_percent(&p) == 20);
+    }
 }
 static void duplicate_tests(void) {
     ProfileSet set;
     char error[256];
     const wchar_t *one = L"{\"id\":%u,\"local_id\":\"%ls\",\"name\":\"N\",\"gender\":\"male\",\"occupation\":\"Programmer\","
-        L"\"computer_name\":\"PC-1\",\"main_task\":\"programming\",\"interests\":[\"x\"],\"randomness_score\":1,\"typo_percent\":1}";
+        L"\"computer_name\":\"PC-1\",\"main_task\":\"programming\",\"interests\":[\"x\"],\"randomness_score\":1,\"mistype_level\":1}";
     wchar_t a[512], b[512], text[1200];
     swprintf(a, 512, one, 1u, L"X-1"); swprintf(b, 512, one, 1u, L"X-2");
     swprintf(text, 1200, L"{\"version\":1,\"profiles\":[%ls,%ls]}", a, b);
@@ -96,6 +105,9 @@ static void shipped_file_tests(const wchar_t *path) {
     CHECK(w && !wcscmp(w->name, L"Wilhelmus Ole") && w->gender == PROFILE_MALE && w->main_task == PROFILE_TASK_PROGRAMMING);
     CHECK(x && !wcscmp(x->name, L"Williana Ole") && x->gender == PROFILE_FEMALE && x->main_task == PROFILE_TASK_PROGRAMMING);
     CHECK(w && w->interest_count > 0 && x && x->interest_count > 0);
+    CHECK(w && w->typing_speed == 4 && x && x->typing_speed == 4);
+    CHECK(w && w->mistype_level == 5 && x && x->mistype_level == 5);
+    CHECK(w && profile_mistype_percent(w) == 10);
     profile_free(&set);
 }
 int main(int argc, char **argv) {

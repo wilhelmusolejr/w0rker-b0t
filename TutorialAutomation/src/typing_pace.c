@@ -47,6 +47,16 @@ TypingDelay typing_pace_next(TypingPace *p, wchar_t character) {
     p->previous = character;
     return delay;
 }
+unsigned typing_speed_delay(unsigned delay_ms, unsigned base_char_ms, unsigned speed) {
+    unsigned wpm, target_ms;
+    uint64_t scaled;
+    if (!speed || !base_char_ms) return delay_ms;
+    if (speed > 10) speed = 10;
+    wpm = 22 + 6 * speed; /* 1: 28 WPM, 5: 52 WPM, 10: 82 WPM. */
+    target_ms = (12000 + wpm / 2) / wpm;
+    scaled = ((uint64_t)delay_ms * target_ms + base_char_ms / 2) / base_char_ms;
+    return scaled > UINT32_MAX ? UINT32_MAX : (unsigned)scaled;
+}
 wchar_t typing_typo_neighbor(wchar_t ch, uint32_t roll) {
     static const char *const near_keys[26] = {
         "qwsz", "vghn", "xdfv", "serfcx", "wsdr", "drtgvc", "ftyhbv", "gyujnb", "ujko", "huikmn",

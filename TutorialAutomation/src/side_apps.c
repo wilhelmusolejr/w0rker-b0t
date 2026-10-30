@@ -742,7 +742,8 @@ int side_apps_open(Playback *p, MotionRng *rng, SideApp app) {
 int side_apps_job(Playback *p, const SideAppJob *job) {
     MotionRng rng;
     motion_seed(&rng, job->seed);
-    p->typo_percent = job->profile->typo_percent;
+    p->typing_speed = job->profile->typing_speed;
+    p->typo_percent = profile_mistype_percent(job->profile);
     p->typo_state = job->seed ^ 0x9e3779b9u;
     motion_hand_for(&p->hand, motion_hash(job->profile->local_id), job->profile->randomness_score);
     if (!p->target) p->target = GetForegroundWindow();

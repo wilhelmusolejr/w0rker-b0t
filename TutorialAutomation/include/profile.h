@@ -24,14 +24,17 @@ typedef struct {
     size_t interest_count, hobby_count;
     /* 0-100. Its effect on playback is still an open decision (TRACKER.md D4). */
     unsigned randomness_score;
-    /* Percentage of typed characters that start a typo-and-correct sequence. */
-    unsigned typo_percent;
+    /* 1-10 mistake scale; converted to an effective letter mistype chance. */
+    unsigned mistype_level;
+    /* 1-10 text entry speed; 5 is about 52 WPM. */
+    unsigned typing_speed;
 } Profile;
 typedef struct { Profile *items; size_t count; } ProfileSet;
 int profile_load(const wchar_t *path, ProfileSet *set, char *error, size_t capacity);
 int profile_parse(const wchar_t *text, ProfileSet *set, char *error, size_t capacity);
 void profile_free(ProfileSet *set);
 const Profile *profile_find(const ProfileSet *set, unsigned id);
+unsigned profile_mistype_percent(const Profile *profile);
 const char *profile_task_name(ProfileTask task);
 const char *profile_gender_name(ProfileGender gender);
 /* Resolve project_path to an absolute folder (it is not created). */

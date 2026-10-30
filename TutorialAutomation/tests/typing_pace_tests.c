@@ -12,6 +12,11 @@ int main(void) {
     unsigned i, rests = 0, changed = 0;
     unsigned min_delay = 10000, max_delay = 0;
     TypingDelay delay;
+    CHECK(typing_speed_delay(185, 185, 0) == 185);
+    CHECK(typing_speed_delay(185, 185, 1) == 429);
+    CHECK(typing_speed_delay(185, 185, 4) == 261);
+    CHECK(typing_speed_delay(185, 185, 5) == 231);
+    CHECK(typing_speed_delay(185, 185, 10) == 146);
     CHECK(typing_pace_next(&a, L'x').delay_ms == 0);
     typing_pace_configure(&a, 80, 200, 600, 1800, 42);
     typing_pace_breaks(&a, 16, 32, 4000, 10000);

@@ -19,6 +19,9 @@ void typing_pace_configure(TypingPace *pace, unsigned char_min, unsigned char_ma
 void typing_pace_breaks(TypingPace *pace, unsigned after_min, unsigned after_max,
                         unsigned pause_min, unsigned pause_max);
 TypingDelay typing_pace_next(TypingPace *pace, wchar_t character);
+/* Rescale text-entry delays so speed 5 is 52 WPM (five characters per word).
+   Speed 0 leaves legacy, non-profile scripts alone. */
+unsigned typing_speed_delay(unsigned delay_ms, unsigned base_char_ms, unsigned speed);
 /* A neighbouring QWERTY key for a letter, keeping its case (0 for anything that is not a-z/A-Z). */
 wchar_t typing_typo_neighbor(wchar_t character, uint32_t roll);
 #endif

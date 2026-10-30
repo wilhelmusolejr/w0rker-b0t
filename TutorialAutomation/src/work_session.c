@@ -640,6 +640,9 @@ int work_session_run(Playback *p, WorkSession *s) {
     unsigned i;
     if (!r) { playback_log(p, "out of memory"); return 0; }
     r->p = p; r->s = s;
+    p->typing_speed = s->profile->typing_speed;
+    p->typo_percent = profile_mistype_percent(s->profile);
+    p->typo_state = s->seed ^ 0x9e3779b9u;
     motion_seed(&r->rng, s->seed * 2654435761u + 3);
     motion_hand_for(&p->hand, motion_hash(s->profile->local_id), s->profile->randomness_score);
     p->client_coords = 0; p->soft_stop = 1;

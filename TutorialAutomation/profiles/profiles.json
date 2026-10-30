@@ -27,7 +27,8 @@
                 "strategy games"
             ],
             "randomness_score": 35,
-            "typo_percent": 2,
+            "typing_speed": 4,
+            "mistype_level": 5,
             "project_path": "Desktop"
         },
         {
@@ -54,7 +55,8 @@
                 "photography"
             ],
             "randomness_score": 55,
-            "typo_percent": 3,
+            "typing_speed": 4,
+            "mistype_level": 5,
             "project_path": "Documents"
         }
     ]

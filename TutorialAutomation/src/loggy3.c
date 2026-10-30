@@ -604,7 +604,12 @@ int loggy_job(Playback *p, LoggyJob *job) {
     MotionRng rng;
     int ok;
     motion_seed(&rng, job->seed);
-    if (job->profile) motion_hand_for(&p->hand, motion_hash(job->profile->local_id), job->profile->randomness_score);
+    if (job->profile) {
+        p->typing_speed = job->profile->typing_speed;
+        p->typo_percent = profile_mistype_percent(job->profile);
+        p->typo_state = job->seed ^ 0x9e3779b9u;
+        motion_hand_for(&p->hand, motion_hash(job->profile->local_id), job->profile->randomness_score);
+    }
     /* Screen coordinates: the title-bar buttons are outside the client area. */
     p->client_coords = 0;
     if (!window_usable(p->target)) p->target = GetForegroundWindow();

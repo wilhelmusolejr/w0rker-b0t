@@ -206,7 +206,7 @@ Run with `start-browsing.cmd [PROFILE_ID] [MINUTES]`; preview with `tutorial.exe
 
 | Status | ID | Task | Size | Source | Notes |
 |---|---|---|---|---|---|
-| [~] | T44 | Typing errors and corrections at the profile's typo %, keeping final-content and checkpoint verification. | M | N1 | `typo_percent` letters typed as a neighbouring key, then Backspace and the right letter (coding and all other typing). Not live-tested. |
+| [~] | T44 | Typing errors and corrections at the profile's mistype level, keeping final-content and checkpoint verification. | M | N1 | `mistype_level` 1–10 maps to a 2–20% chance of first typing an eligible letter as a neighbouring key, then Backspace and the right letter (coding and all other typing). Not live-tested. |
 | [ ] | T45 | Map the randomness score to concrete playback choices (tab count, dwell time, pauses). `needs D4` | M | O3, N1 | |
 | [ ] | T46 | Weekday / weekend schedules (weekday = main task, weekend = main or side). | S | N1 | |
 | [ ] | T47 | Choose whether to start with the main or side task, and the initial visible state (desktop, folder, CMD, app). `needs D6` | S | N3 | |

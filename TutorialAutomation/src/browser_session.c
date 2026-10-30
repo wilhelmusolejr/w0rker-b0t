@@ -73,7 +73,7 @@ static void print_wide(const char *label, const wchar_t *text) {
 void browser_session_print_plan(const BrowseSession *s, const BrowsePlan *plan) {
     unsigned i;
     print_wide("Profile: ", s->profile->name);
-    printf(" (id %u, randomness %u, typo %u%%)\n", s->profile->id, s->profile->randomness_score, s->profile->typo_percent);
+    printf(" (id %u, randomness %u, mistype level %u)\n", s->profile->id, s->profile->randomness_score, s->profile->mistype_level);
     printf("Session: %.1f minutes, seed %lu, browser opened from the %s.\n", s->duration_ms / 60000.0,
         (unsigned long)s->seed, s->via_taskbar ? "taskbar icon" : "Windows Run dialog");
     printf("Tabs to fill: %u\n", plan->tab_count);
@@ -588,6 +588,7 @@ int browser_session_run(Playback *p, const BrowseSession *s) {
     unsigned filled = 0, failures = 0, recoveries = 0, i;
     int ok = 0, stay = 0;
     if (!x || !(x->page = calloc(1, sizeof(*x->page)))) { free(x); playback_log(p, "out of memory"); return 0; }
+    p->typing_speed = s->profile->typing_speed;
     x->p = p; x->s = s;
     browser_session_plan(s, &plan);
     browser_session_print_plan(s, &plan);
@@ -599,7 +600,7 @@ int browser_session_run(Playback *p, const BrowseSession *s) {
     typing_pace_configure(&p->typing_pace, 70, 190, 400, 900, s->seed ^ 0x5bd1e995u);
     typing_pace_breaks(&p->typing_pace, 0, 0, 0, 0);
     /* Searches and addresses get the profile's typing mistakes too. */
-    p->typo_percent = s->profile->typo_percent;
+    p->typo_percent = profile_mistype_percent(s->profile);
     p->typo_state = s->seed ^ 0x9e3779b9u;
     motion_hand_for(&p->hand, motion_hash(s->profile->local_id), s->profile->randomness_score);
     x->started = GetTickCount64(); x->paused = p->paused_ms;
