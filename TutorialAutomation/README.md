@@ -1,12 +1,12 @@
-# Windows Tutorial Automation
+# Windows accessibility automation helper
 
 A native C11/Win32 player for scripted teaching demonstrations and desktop UI interaction tests. Scripts drive an active, unlocked Windows desktop using `SendInput` and cursor APIs. All script syntax and external text files are checked before playback. Configurable timing ranges and seeds control presentation pacing and scrolling; application and network timing can still vary.
 
-This is a personal learning project for accessibility-based UI targeting and
-AI-assisted interaction experiments. The active workflows use one interactive
-Windows session at a time. The optional Telegram monitor controls that session;
-the long-duration Loggy3 session described below is an opt-in integration
-experiment and still needs live acceptance testing.
+This is a personal learning project for an accessibility automation and AI helper.
+The active workflows use one interactive Windows session at a time. The optional
+Telegram monitor controls that session. The combined coding and browsing session
+uses either a local duration or a daily recording target; Loggy3 failure does not
+stop desktop work. The combined run still needs live acceptance testing.
 
 See the [project overview](../README.md) for the component map and the distinction between the native player, Python experiments, and proposed integration work.
 
@@ -34,7 +34,7 @@ Each profile has two independent 1–10 controls in [profiles/profiles.json](pro
 
 `mistype_level` 5 means an ordinary amount of visible corrections; it does not mean 50% of letters are wrong. The implementation maps level 1–10 to a 2–20% chance that an eligible letter is first typed as a neighbouring key and immediately corrected (level 5: 10%). This is an approximation chosen to produce roughly the [6.3% correction-key frequency observed in the study](https://userinterfaces.aalto.fi/136Mkeystrokes/resources/chi-18-analysis.pdf) for text with about 70% eligible letters. The final saved text is still checked against the reference. `mistype_level` is the only mistake setting in each profile.
 
-Idle settings are shared by profiles. [profiles/session.json](profiles/session.json) targets about 10% of a recorded work session as one-minute idles; it considers another idle after 5–10 minutes. The session planner adjusts the chance at each check to approach that time share, and Loggy3 keeps recording during an idle. [profiles/programming.json](profiles/programming.json) gives standalone `--code` runs a 10% chance of a one-minute idle after a coding checkpoint. The work session uses only its session idles, so coding checkpoints do not add a second idle schedule on top.
+Idle settings are shared by profiles. [profiles/session.json](profiles/session.json) targets about 10% of a work session as one-minute idles; it considers another idle after 5–10 minutes of active work. The session planner adjusts the chance at each check to approach that time share. Loggy3 records an idle when it is available. [profiles/programming.json](profiles/programming.json) gives standalone `--code` runs a 10% chance of a one-minute idle after a coding checkpoint. The combined work session uses only its session idles.
 
 **Project list:** [profiles/projects.json](profiles/projects.json) lists the GitHub projects, each pinned to a full 40-character commit id so the reference never changes under a half-typed file:
 
@@ -59,42 +59,38 @@ During `--code` and `--browse`, every 8-15 minutes of the main task (`check_ever
 
 When the break ends, the app is closed with Alt+F4, or minimized and left open `leave_open_percent` (20%) of the time. If a step fails (a window that does not open, a control that moved), the app is closed and the main task continues; F9, F12, Ctrl+C, and Telegram `/stop` still stop everything. Try one app on its own with `tutorial.exe --apps 1 --app notepad --minutes 2`.
 
-## Optional long-duration work session
+## Combined work session
 
-`start-session.cmd [PROFILE]` from the repository root, or `tutorial --session ID`.
-Preview the day with `tutorial --dry-run-session ID [--seed N]`: it reads today's total from
-Loggy3 (no input) and prints the planned timeline. Settings: `profiles/session.json`.
+`start-session.cmd [PROFILE]` starts one local desktop session. For a short end-to-end run, use
+`start-session.cmd 1 --duration-minutes 20`. This selects **20 active minutes from this launch**;
+the 10-hour daily target cannot end it early. The clock starts after the launcher countdown and
+includes preparation, coding, browsing, app breaks, idles, and ending. F8 and Telegram pauses do
+not consume the budget. The ending begins near the deadline; a save or slow UI action can finish
+slightly late. Loggy3 is attempted but is optional in this mode.
 
-1. **Prepare.** Reads Loggy3: open, recording, and today's recorded time (the Sessions page's UTC
-   day row plus the running timer). Rolls today's target, 10h15-10h45. Already at the target:
-   presses nothing. Already recording (for example after a restart): carries on.
-2. **Start look** (rolled): empty desktop, VS Code with the project, a short browse, or a random
-   app. Then Loggy3 Start (straight to the button or after looking over the window), then Loggy3
-   is minimized or left behind the work.
-3. **Work.** Coding slots (40-80 min) and browsing slots (10-20 min) take turns, with other-app
-   breaks (5-20 min, from `apps.json`) inside them. A coding slot ends by finishing its line and
-   saving; the next one resumes there, and moves on to the next project when one is done. After a
-   browsing slot Chrome is minimized, closed, or left behind.
-   **Idles away from the desk** take about 5% of the day (`idle_percent`; a little more for a
-   profile with a higher randomness score): every 20-40 min of recorded work there is a chance of
-   1-6 min with no input, sometimes with one small mouse nudge halfway. They start only at safe
-   points (a coding checkpoint, between browsing steps, between slots), are planned up front so
-   the dry run lists them, and count toward the target (Loggy3 keeps recording).
-4. **Watch** (every 15 s, no input): Loggy3's timer. Today's recorded time near the target, or
-   Telegram /stop, ends the day. Loggy3 stopped by itself: Start is clicked again (once more after
-   2 min), with a Telegram alert.
-5. **End look** (rolled): direct stop, close everything, or close 1-2 apps (X button, Alt+F4, or
-   the taskbar menu, at random), then Loggy3 Stop, and Loggy3 is left, minimized, or closed. A
-   summary goes to the log and, through the monitor, to Telegram.
+Without `--duration-minutes`, the session keeps its existing daily target: a random
+**10h15m–10h45m** total in Loggy3, including time recorded earlier in its UTC day. A successful
+read of today's total determines how much remains. If Loggy3 cannot open, cannot be read, or
+cannot confirm Start, work still runs. The local clock then counts the remaining time from the
+last confirmed total. When no total was ever readable, it uses the full selected target and
+reports that assumption. Once local fallback begins, later recorder recovery does not move the
+deadline. `--target-minutes N` keeps the daily-total meaning; it cannot be combined with
+`--duration-minutes N`. Both options accept 1–1440 minutes.
 
-Telegram /stop during a session finishes the line, saves, runs the ending and stops the recording;
-F9/F12 still stop at once (and leave Loggy3 recording). Short test day:
-`start-session.cmd 1 --target-minutes 25 --coding-minutes 8 --browsing-minutes 4` (the target is
-today's total in Loggy3, so it includes what was already recorded today).
+The session alternates coding slots (40–80 min) and browsing slots (10–20 min). Other-app breaks
+(5–20 min) and one-minute idles can occur at safe points and count toward either time limit. It
+tries Loggy3 again at most twice after a failure, spaced by `restart_wait_seconds`, while work
+continues. At the end it stops a confirmed recording; if the final recorder state is unknown,
+the log and optional Telegram monitor alert the user. Telegram `/stop` finishes the current line,
+saves, and runs the ending immediately. F9/F12 stop immediately and may leave recording active.
 
-The Telegram monitor's /status and screenshot captions start with Loggy3's state, today's recorded
-hours (and the target), and the session's current task. `monitor --status` prints that text
-locally without sending anything.
+Preview with `tutorial.exe --dry-run-session 1 --duration-minutes 20 --seed 7` or omit the duration
+to preview the daily-target plan. Session previews work before reference projects
+are downloaded and send no desktop input. A live coding task needs projects in
+`programming_files/`; run `tutorial.exe --fetch-projects` to prepare them. Settings are in
+[profiles/session.json](profiles/session.json). The monitor's `/status` shows the selected clock
+mode, Loggy3's separate state, and the current task; `monitor.exe --status` prints it locally.
+The combined session and recorder-failure recovery still need a short live acceptance run.
 
 ## Loggy3 recorder
 

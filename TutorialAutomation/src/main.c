@@ -55,8 +55,8 @@ static void usage(void) {
          "tutorial --fetch-projects [--programming FILE.json]   (clone every listed project at its pinned commit)\n"
          "tutorial --apps PROFILE_ID [--app notepad|explorer|calculator|images] [--minutes N] [--seed N]\n"
          "tutorial --session PROFILE_ID | --dry-run-session PROFILE_ID [--seed N] [--countdown SECONDS] [--log FILE]\n"
-         "         [--target-minutes N] [--coding-minutes N] [--browsing-minutes N]   (fixed values, for short test days)\n"
-         "         (a whole recorded day: Loggy3 Start, coding and browsing until today's target, then Stop)\n"
+         "         [--duration-minutes N | --target-minutes N] [--coding-minutes N] [--browsing-minutes N]\n"
+         "         (duration: this run, independent of Loggy3; default: today's Loggy3 target with a local fallback)\n"
          "tutorial --loggy3 status|show|minimize|close|record|stop|demo [--dry-run] [--hover-only] [--hover-seconds N]\n"
          "         [--hold SECONDS] [--minimize-after] [--profile ID] [--profiles FILE.json] [--countdown SECONDS] [--log FILE]\n"
          "--browse and --code take side-app breaks from profiles\\apps.json; --no-side-apps turns them off.\n"
@@ -406,11 +406,11 @@ finish:
     script_free(&script); profile_free(&profiles);
     return exit_code;
 }
-/* A whole recorded work day: --session PROFILE_ID, or --dry-run-session PROFILE_ID to print the day. */
+/* An accessibility work session, or an input-free preview of its plan. */
 static int session_main(wchar_t **argv, int argc) {
     const wchar_t *profiles_path = NULL, *log_path = NULL;
     wchar_t path[MAX_PATH];
-    unsigned long profile_id = 0, seed = 0, countdown = 10, target = 0, coding = 0, browsing = 0;
+    unsigned long profile_id = 0, seed = 0, countdown = 10, target = 0, duration = 0, coding = 0, browsing = 0;
     int i, dry = 0, ok, exit_code = 2;
     ProfileSet profiles = {0};
     SessionConfig config;
@@ -434,6 +434,8 @@ static int session_main(wchar_t **argv, int argc) {
             if (!number_argument(argv, argc, &i, 0, 3600, &countdown)) goto invalid;
         } else if (!wcscmp(argv[i], L"--target-minutes")) {
             if (!number_argument(argv, argc, &i, 1, 24 * 60, &target)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--duration-minutes")) {
+            if (!number_argument(argv, argc, &i, 1, 24 * 60, &duration)) goto invalid;
         } else if (!wcscmp(argv[i], L"--coding-minutes")) {
             if (!number_argument(argv, argc, &i, 1, 600, &coding)) goto invalid;
         } else if (!wcscmp(argv[i], L"--browsing-minutes")) {
@@ -442,6 +444,7 @@ static int session_main(wchar_t **argv, int argc) {
         else if (!wcscmp(argv[i], L"--log") && i+1 < argc && !log_path) log_path = argv[++i];
         else goto invalid;
     }
+    if (target && duration) { fputs("--duration-minutes and --target-minutes cannot be combined\n", stderr); goto invalid; }
     if (!profiles_path) {
         static wchar_t profiles_default[MAX_PATH];
         if (!default_profile_file(L"profiles.json", profiles_default)) { fputs("profiles\\profiles.json not found; use --profiles\n", stderr); return 2; }
@@ -455,6 +458,26 @@ static int session_main(wchar_t **argv, int argc) {
     if (!default_profile_file(L"session.json", path) || !session_config_load(path, &config, error, sizeof(error))) {
         fprintf(stderr, "session.json: %s\n", *path ? error : "not found"); goto finish;
     }
+    /* Preview needs only the profile and session settings, even before projects are downloaded. */
+    if (target) config.target_minutes[0] = config.target_minutes[1] = (unsigned)target;
+    if (coding) config.coding_minutes[0] = config.coding_minutes[1] = (unsigned)coding;
+    if (browsing) config.browsing_minutes[0] = config.browsing_minutes[1] = (unsigned)browsing;
+    session.seed = seed ? (uint32_t)seed : action_recording_seed();
+    session.duration_minutes = (unsigned)duration;
+    if (dry) {
+        SessionPlan plan;
+        LoggyToday today;
+        HWND w = duration ? NULL : loggy_window(NULL);
+        long so_far = 0;
+        if (duration) config.target_minutes[0] = config.target_minutes[1] = (unsigned)duration;
+        else if (w && loggy_today(w, NULL, &today) && today.found) so_far = loggy_today_seconds(&today);
+        else puts("(Loggy3's today row is unavailable for this preview; showing a zero-based plan. A live run will try to read it.)");
+        session_plan(&config, session.seed, (unsigned)so_far, session.profile->randomness_score, &plan);
+        printf("Seed %lu.\n", (unsigned long)session.seed);
+        session_print_plan(&config, &plan, session.profile, (unsigned)so_far, duration != 0);
+        puts("Dry-run complete; no input generated. Repeat with --seed to get the same session live.");
+        exit_code = 0; goto finish;
+    }
     if (!default_profile_file(L"programming.json", path) || !programming_config_load(path, &programming, error, sizeof(error))) {
         fprintf(stderr, "programming.json: %s\n", error); goto finish;
     }
@@ -465,27 +488,8 @@ static int session_main(wchar_t **argv, int argc) {
     if (!default_profile_file(L"apps.json", path) || !side_apps_load(path, &side_apps, error, sizeof(error))) {
         fprintf(stderr, "apps.json: %s\n", error); goto finish;
     }
-    /* Short test days: a fixed target (total for today, as Loggy3 counts it) and slot lengths. */
-    if (target) config.target_minutes[0] = config.target_minutes[1] = (unsigned)target;
-    if (coding) config.coding_minutes[0] = config.coding_minutes[1] = (unsigned)coding;
-    if (browsing) config.browsing_minutes[0] = config.browsing_minutes[1] = (unsigned)browsing;
     session.config = &config; session.programming = &programming; session.manifest = &manifest;
     session.catalog = &catalog; session.side_apps = &side_apps;
-    session.seed = seed ? (uint32_t)seed : action_recording_seed();
-    if (dry) {
-        SessionPlan plan;
-        LoggyToday today;
-        HWND w = loggy_window(NULL);
-        long so_far = 0;
-        /* Today's total, read from Loggy3 without any input. */
-        if (w && loggy_today(w, NULL, &today) && today.found) so_far = loggy_today_seconds(&today);
-        else puts("(Loggy3's today row could not be read; counting from 0.)");
-        session_plan(&config, session.seed, (unsigned)so_far, session.profile->randomness_score, &plan);
-        printf("Seed %lu.\n", (unsigned long)session.seed);
-        session_print_plan(&config, &plan, session.profile, (unsigned)so_far);
-        puts("Dry-run complete; no input generated. Repeat with --seed to get the same day live.");
-        exit_code = 0; goto finish;
-    }
     script.commands = calloc(1, sizeof(*script.commands));
     if (!script.commands) goto finish;
     script.count = 1; script.commands[0].kind = CMD_WORK_SESSION; script.commands[0].line = 1;

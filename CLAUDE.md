@@ -1,19 +1,22 @@
 # Project context
 
-This is a personal learning project for accessibility-based Windows UI automation
-and AI-assisted interaction experiments. The active implementation drives one
-interactive desktop session at a time. It contains a C11/Win32 player, Python
-prototypes, disposable teaching examples, and tests.
+This is a personal learning project for an accessibility automation and AI helper
+on Windows. The active implementation drives one interactive desktop session at
+a time. It contains a C11/Win32 player, Python targeting experiments, teaching
+examples, and input-free tests. The player currently follows configured actions;
+AI-assisted decisions are experimental rather than a shipped autonomous feature.
 
-Read [README.md](README.md) for the component map, [task.md](task.md) for the
-current work plan, and [TRACKER.md](TRACKER.md) for task status. Earlier notebook
-photos and Git history include a retired multi-instance manager proposal; it is
-outside the active scope.
+Read [README.md](README.md) for the repository map, [task.md](task.md) for the
+current work plan, and [TRACKER.md](TRACKER.md) for task status. Native code is
+under `TutorialAutomation/src` and `include`; settings are in `profiles`, with
+input-free checks under `tests`. Small experiments are under `experiments`.
 
-The optional Telegram monitor controls the configured playback session. The
-Loggy3 integration and its long-duration settings are documented as implemented
-experiments, with live-validation limits stated in the feature guides. Preserve
-those facts when changing documentation.
+The optional Telegram monitor controls the configured playback session. A
+combined session with `--duration-minutes N` uses local active time and continues
+if Loggy3 is unavailable. Without that option, the daily Loggy3 target is
+10h15m–10h45m by default; an unreadable recorder switches the remaining budget
+to a local countdown. Keep the live-validation limits stated in the feature
+guides accurate when changing documentation.
 
 For code changes, keep desktop and foreground guards, stop controls, bounded
 targets, and saved-output checks intact. Use dry runs and input-free tests before

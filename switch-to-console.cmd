@@ -3,7 +3,7 @@ rem Moves this RDP session to the physical console instead of disconnecting it.
 rem The desktop stays unlocked and running, so playback continues and RustDesk can show it.
 rem Your RDP window closes; reconnect with RDP or RustDesk later.
 rem Afterwards the console display is kept at 1920x1080 (see logs\resolution.log).
-rem --quiet: never wait for a key (the scheduled task that Telegram /start runs; see setup-bot.cmd).
+rem --quiet: never wait for a key (the scheduled task that Telegram /start runs; see setup-monitor.cmd).
 set "quiet="
 if /i "%~1"=="--quiet" set "quiet=1"
 net session >nul 2>&1

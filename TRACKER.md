@@ -3,9 +3,10 @@
 Small, shippable tasks broken out from [task.md](task.md). Each one should fit in
 one sitting and end with something you can run, test, or dry-run.
 
-Active scope: one interactive Windows session for personal learning and
-accessibility-based UI testing. The earlier multi-instance manager proposal was
-retired on 2026-10-31; its source sketches and Git history remain available.
+Active scope: one interactive Windows session for personal learning in
+accessibility automation and an AI helper. The current player follows configured
+actions; live desktop behavior and broader AI-assisted decisions remain separate
+validation and research tasks.
 
 **How to use:** change a task's status in place, add a short note when you finish
 or get stuck, and link the commit. Phases run roughly in order; later phases plug
@@ -47,114 +48,54 @@ desktop input, so you can test them entirely with `--dry-run-config`.
 |---|---|---|---|---|---|
 | [~] | T9 | Port Loggy3 show / maximize / minimize / close from the Python prototype to C. | M | O1, N1 | `src/loggy3.c`, `start-loggy3.cmd` show, minimize, close, demo. Taskbar icon, then title-bar buttons by accessible name, with the profile's mouse hand. Close refuses while recording. Not live-tested. |
 | [x] | T10 | Port recording-state inspection (accessibility) to C, with a status-only CLI flag. | M | N1 | `tutorial --loggy3 status`: no input, works while minimized. Read Start and `--:--:--` live on 2026-10-28. |
-| [~] | T11 | Add Start/Stop recording actions in C, with dry-run and hover-only modes. | M | N1, N3 | `--loggy3 record` and `stop` with `--dry-run` and `--hover-only`. A real mouse click on the button (checked under the pointer first), sent once, never retried. Dry runs and hover-only checked live on 2026-10-28 (rested on Start 8 s, still stopped). Real Stop click checked live: stopped a 42 s recording, confirmed within 1 s. A real Start click not yet. |
+| [~] | T11 | Add Start/Stop recording actions in C, with dry-run and hover-only modes. | M | N1, N3 | `--loggy3 record` and `stop` use a checked button click once. Both real Start and Stop transitions were confirmed in 2026-10-28/29; the combined session is not live-tested. |
 | [x] | T12 | Live test one real Start → Stop transition and record the result here. | S | | 2026-10-28/29: the script clicked Stop (confirmed within 1 s) and Start (confirmed within 3 s, timer running). |
-| [ ] | T13 | Session start sequence: optionally open a chosen app, start recording, optionally close that app, then begin tasks. | M | N1, N3 | Planned: see "Session plan", step 1. Built as T62. |
-| [ ] | T14 | Session end sequence: save outputs, close all / one / no apps, stop recording, in the configured order. | M | N1, N3 | Planned: see "Session plan", step 4. Built as T63. |
+| [~] | T13 | Session start sequence: prepare a chosen app, attempt recording, then begin tasks. | M | N1, N3 | Implemented through T62; the session now continues when Loggy3 cannot start. Live acceptance remains. |
+| [~] | T14 | Session end sequence: save outputs, close selected apps, and stop a confirmed recording. | M | N1, N3 | Implemented through T63; recorder state may require manual checking if unavailable. Live acceptance remains. |
 
-### Optional long-duration session plan (agreed 2026-10-28, partially built)
+### Combined accessibility session (implemented, live acceptance pending)
 
-`start-session.cmd [PROFILE]` runs the local session experiment with Loggy3. See
-T57–T65 for implemented pieces and the remaining live acceptance work.
+`start-session.cmd 1 --duration-minutes 20` selects a 20-minute local session
+budget from launch. Loggy3 recording is attempted, but its total cannot stop
+this run. Preparation, work, planned idles, app breaks, and ending share the
+budget; explicit pauses are excluded. A safe save or slow UI step can finish
+slightly after the deadline.
 
-**Decisions**
-- Main task: coding. Alternative task: browsing (for now).
-- Time comes from Loggy3: today's total from its Sessions page (UTC day) plus the running timer.
-- Daily target: random 10h15–10h45.
-- Telegram stop: finish the current line, save, then end.
-- Loggy3 stops by itself: auto-recover (click Start again, alert on Telegram).
-- Launched when today is already close to the target: record only what remains.
-- Crossing Loggy3's day boundary (00:00 UTC, 8 AM for the owner): keep going until the target. The session counts from its launch snapshot; Loggy3 splits the hours between its two days (confirmed 2026-10-29).
-- Telegram summary at the end: yes.
-- Start and end looks are randomized so days don't look alike. All percentages below are placeholders for the config discussion (D4).
+Without a duration override, `profiles/session.json` selects a daily Loggy3
+target between 10h15m and 10h45m. Time already recorded in its UTC day counts.
+If Loggy3 cannot be opened, read, or started, the session keeps working. It
+switches once to a local countdown for the remaining amount from the last
+confirmed total. If no total was readable, it uses the full selected target
+and reports that assumption. Later recorder recovery does not move the deadline.
+`--target-minutes N` remains a daily-total override and is mutually exclusive
+with `--duration-minutes N`.
 
-**0. Prepare**
-- Read Loggy3: open, recording, today's total (T0). Not open: open it from the Start menu.
-- Roll today's target. Remaining = target − T0.
-- Already at the target: press nothing, send Telegram "already done today", exit.
-- Already recording (for example after a crash restart): don't click Start, carry on.
-- State unknown or busy for more than 10 s: don't start, alert.
-- The count is a snapshot at launch, so Loggy3's midnight-UTC rollover (5 PM Pacific) doesn't reset the session.
-
-**1. Start look** (rolled each day)
-
-| Look | Odds | On screen before Start |
-|---|---|---|
-| Empty desktop | 25% | Win+D, or minimize what's open. |
-| VS Code already open | 35% | Open or focus VS Code with the project. |
-| Browser open | 20% | Chrome on a random catalog site. |
-| A random app | 20% | Explorer, Notepad, or Calculator. Afterwards closed (50%) or left open (50%). |
-
-Then:
-1. Click Loggy3's taskbar icon.
-2. Go to Start: straight to the button, or look over the window first (50/50).
-3. Click once and confirm the button reads Stop with the timer running.
-4. Put Loggy3 away: minimize (60%) or just switch to the work (40%).
-
-First task: coding (80%) or browsing (20%).
-
-**2. Work loop**
-
-| Part | Range | Notes |
-|---|---|---|
-| Coding slot | 40–80 min | Breaks count inside the slot. Ends by finishing the line and saving. Resumes there next slot. Next project when one is done. |
-| Browsing slot | 10–20 min | Afterwards Chrome is minimized (50%), closed (20%), or left behind VS Code (30%). |
-| Other-app break | 5–20 min | Checked every 8–15 min, 20% chance. Explorer, Calculator, images, or Notepad, by weight. Closed (80%) or minimized (20%). |
-| Slot error | — | Up to 5 recoveries, then that slot ends early and the loop continues. |
-
-Rough split: coding 75–80%, browsing 10–15%, other apps the rest.
-
-**3. Watchers** (every few seconds, in every step)
-
-| Event | Reaction |
+| Phase | Current behavior |
 |---|---|
-| Telegram stop | Finish the line, save, go to step 4. |
-| Telegram pause / resume | The automation freezes; Loggy3 keeps recording. |
-| Target − estimated ending time reached | Go to step 4, so Stop lands near the target. |
-| Loggy3 stopped by itself | Save, alert, click Start once, confirm. If it doesn't take within 20 s, try once more 2 min later. If that also fails, end the day with an alert. Re-read T0 after the restart. |
-| Desktop locked or RDP disconnected | Wait as now. Loggy3 time still counts. |
+| Prepare | Read Loggy3 when available; keep the desktop guards and choose one timing mode. |
+| Work | Alternate coding and browsing; side-app breaks and session idles count toward the selected limit. |
+| Recorder failure | Alert, switch the default clock to local fallback, and retry recording at most twice at safe points. Work continues. |
+| End | Finish a safe coding line, run the selected end look, wait to a local deadline if ending finishes early, and stop a confirmed recording. |
+| Controls | Telegram `/stop` winds down; F9/F12 stop immediately; F8 and remote pauses suspend local active time. |
 
-**4. End look** (weights vary a little each day)
-
-| Ending | About | Steps |
-|---|---|---|
-| Direct stop | 35% | Save, then Stop. Everything else stays as it is. |
-| Close everything | 30% | Save, close each open app in random order, then Stop. |
-| Close 1–2 apps | 35% | Save, close 1–2 random apps, then Stop. |
-
-- How each app is closed: X button 40%, Alt+F4 35%, taskbar right-click "Close window" 25%.
-- VS Code: always saved first; an "unsaved" prompt is answered Save.
-- Approach to Stop: straight or look over the window first (50/50).
-- Afterwards: Loggy3 is left in front (40%), minimized (40%), or its window closed (20%).
-- Confirm the button reads Start, then log and send the summary.
-
-**Example timeline** (one possible day)
-
-```
-07:00:10      —     prepare: T0 0h00m, target 10h31m
-07:00:11      —     start look: VS Code already open
-07:00:21      —     Loggy3 taskbar → straight to Start → click
-07:00:25  0:00:01   confirmed recording → minimize Loggy3
-07:00:30  0:00:05   CODING 63 min (07:24 Calculator break 7 min)
-08:03:34  1:03:09   BROWSING 14 min
-08:17:36  1:17:11   CODING 71 min ... alternating ...
-11:47:12  4:46:47   Loggy3 stopped by itself → save, alert, Start, confirmed
-17:00:00  9:59:35   Loggy3 day rolls over (ignored: launch snapshot)
-17:27:50 10:27:25   target near → ending: close 2 apps (Chrome via taskbar, Calculator via X)
-17:28:28            Stop → confirmed 10:31:04 → Telegram summary → exit
-```
+The current session is scripted and profile driven. Windows accessibility
+provides control names, states, and rectangles; foreground and desktop checks
+guard each input. Logs and saved-output verification show what actually ran.
+See [the session guide](TutorialAutomation/README.md#combined-work-session).
+The combined session, especially Loggy3 failure and recovery, has not yet been
+validated in a live desktop run.
 
 | Status | ID | Task | Size | Source | Notes |
 |---|---|---|---|---|---|
 | [x] | T57 | Read today's recorded total from Loggy3's Sessions page (UTC day row) plus the running timer. Read-only; check live whether the day row already includes the running session. | S | | `loggy_today` / `loggy_today_seconds` in `src/loggy3.c`; `--loggy3 status` prints it. Checked live 2026-10-29: the day row counts finished sessions only (stayed 48s while recording 1m18s), so today = row + running timer. Row only shown on the Sessions page, current period; totals are per Loggy3 account (all computers). |
-| [x] | T58 | `profiles/session.json` (target range, slot lengths, break odds, start/end weights) and `--dry-run-session ID` printing the day's planned timeline. | M | | `profiles/session.json`, `tutorial --dry-run-session ID [--seed N]` prints the day (reads today's total from Loggy3, no input). 16405 plan checks. |
+| [x] | T58 | Session settings and input-free dry-run timeline. | M | | `profiles/session.json` sets the daily target and slot lengths. `tutorial --dry-run-session ID --duration-minutes 20` prints a duration plan without reading Loggy3 or requiring downloaded projects; the default preview reads today's total when available. |
 | [~] | T59 | Time-limited slots: coding and browsing take a budget and stop at a safe point (line finished, file saved). | M | | Coding stops at a safe point (finishes the line, saves, `ended_early`) and reuses an open VS Code window; browsing and side-app breaks end on `playback_yield`. Not live-tested. |
-| [~] | T60 | Session loop: coding ⇄ browsing with other-app breaks (5–20 min), recorded-time accounting, ending started early. | M | | `src/work_session.c`: slots alternate, shared side-app timer (breaks 5-20 min), recorded time = today's row at launch + banked + Loggy3 timer. Not live-tested. Idles away from the desk: about 5% of the day (scaled 0.8-1.2 by the profile's randomness score), 1-6 min every 20-40 min of work at a planned chance, counted in the target; listed in the dry run. |
-| [~] | T61 | Watchers: Telegram stop (finish line, save, end), Loggy3 stopped by itself (auto Start, alert), desktop locked. | M | | Telegram /stop becomes a wind-down in sessions (`soft_stop`); watcher every 15 s; Loggy3 stopped twice in a row → Start again (retry after 2 min), alert. Not live-tested. |
+| [~] | T60 | Combined session loop and two timing modes. | M | | `src/work_session.c` alternates coding and browsing. `--duration-minutes N` uses a local clock; the default uses the daily Loggy3 target and switches to a local remaining-time countdown after recorder failure. Session idles use active local time. Input-free clock tests pass; live acceptance remains. |
+| [~] | T61 | Watcher and recorder-failure recovery. | M | | Every 15 s the watcher checks the selected deadline and Loggy3 read-only. Missing, stopped, or unknown recording triggers a local fallback and at most two spaced retries. Work continues; Telegram `/stop` winds down. Live acceptance remains. |
 | [~] | T62 | Start looks (empty desktop, VS Code, browser, random app) and the Loggy3 Start sequence. | M | | Replaces T13. Start looks and Loggy3 Start (opens the Sessions page if needed). Not live-tested. |
 | [~] | T63 | End looks (direct, close all, close 1–2), app closing by X / Alt+F4 / taskbar menu, Loggy3 after-stop. | M | | Replaces T14. End looks; apps closed by X / Alt+F4 / taskbar menu "Close window"; save prompts answered (VS Code: Save). Not live-tested. |
-| [~] | T64 | Session summary in the log and on Telegram. `start-session.cmd`. Short live test (about 15 min target), then a full day. | M | | `SESSION SUMMARY` / `SESSION ALERT` lines, forwarded to Telegram by the monitor. `start-session.cmd`, short test day options. Live test still to do. |
-| [x] | T65 | Telegram `/screenshot` and `/status` include Loggy3 (recording or not, timer), today's recorded hours from the app, and the current task (for example "coding kruzpayr, src/App.jsx, 34 of 63 min"). | S | | The monitor reads Loggy3 itself (read-only, accessibility); the session writes its current task to a small state file. Uses T57. Monitor reads Loggy3 itself (state, timer, today's hours) and the session's `SESSION TASK` / current file. `monitor --status` checked locally. Restart the monitor to load it. |
+| [~] | T64 | Session summary, alerts, and short live acceptance run. | M | | `SESSION SUMMARY`, `SESSION ALERT`, and `SESSION CLOCK` lines feed the optional monitor. A 20-minute `--duration-minutes 20` run is the intended short acceptance check; live validation is pending. |
+| [x] | T65 | Telegram `/screenshot` and `/status` include recorder state, selected session clock mode, and current task. | S | | The monitor reads Loggy3 through accessibility and follows `SESSION TARGET`, `SESSION CLOCK`, and `SESSION TASK` log lines. `monitor --status` is input-free. |
 
 ## Phase 3: Browser
 
@@ -164,7 +105,7 @@ Run with `start-browsing.cmd [PROFILE_ID] [MINUTES]`; preview with `tutorial.exe
 |---|---|---|---|---|---|
 | [~] | T15 | Browser window open / close / minimize as separate actions, distinct from tab actions. | S | O1, N3 | Opening from the taskbar icon works (`browser_open_window`). Close and minimize actions not done yet. |
 | [x] | T16 | Site catalog file with categories (programming/docs, GitHub, lifestyle, social). Start with about 30 sites. `needs D12` for "dribble" | S | O1 | `profiles/browsing.json`: Superseded by T17. Reddit removed on request, so no social media. "dribble" left out until D12. |
-| [x] | T17 | Grow the site catalog to 100 sites. | S | N3 | 100 sites: 50 programming (31 docs, 6 GitHub, 13 blogs) and 50 others (food, home/plants, beauty/yoga, photography, travel, books, movies/K-dramas, games, tech/general news, science). All load without a login wall or bot challenge, checked 2026-10-28. |
+| [x] | T17 | Grow the site catalog to 100 sites. | S | N3 | 100 sites: 50 programming (31 docs, 6 GitHub, 13 blogs) and 50 others (food, home/plants, beauty/yoga, photography, travel, books, movies/K-dramas, games, tech/general news, science). All load without a login wall or automated-access challenge, checked 2026-10-28. |
 | [x] | T18 | Search topics driven by profile interests (questions, quotes, songs, apps, Loggy3). | S | O3, N1 | Question, phrase, song lyrics, apps, and Loggy3 templates filled from profile interests. |
 | [x] | T19 | Per visit, choose direct URL entry or Google search then open a result (extend the existing research visit). | S | N1 | `direct_site_percent` (50%) per tab. |
 | [~] | T20 | Multi-tab visit: random 1–5 tabs with a search in each. Define return and close rules. `needs D7, D8` | M | N1 | 1-5 tabs filled and revisited. Closing rule is provisional until D8. Not live-tested. |

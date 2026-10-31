@@ -1,5 +1,21 @@
 # Verification and desktop acceptance tests
 
+## Session clock change — 2026-10-31
+
+The native build completed with no compiler warnings. Input-free `session_tests`,
+`dry_run_session`, and `dry_run_session_duration` passed. The new clock checks cover
+a 20-minute duration independent of a larger Loggy3 total, explicit pauses,
+the default daily-total target, fallback from a last confirmed total, and a full
+default fallback when no total was readable. The duration dry run printed an
+end-to-end plan without sending desktop input.
+
+The full CTest run passed 29 of 35 checks. Six unrelated checks require local
+fixtures that are absent or differ in this checkout: `project_tests` expects the
+`kruzpayr` reference folder; four reference-job checks expect an existing
+destination directory; `excel_simulation_files` found rebuilt workbook hashes
+different from its recorded manifest. The combined session and Loggy3 failure
+path have **not** been run live on a desktop yet.
+
 ## Recorded results — 2026-10-15
 
 Environment: Windows x64, GCC 15.2.0 (portable w64devkit 2.5.0), CMake 3.31.6, MinGW Makefiles, Debug configuration.

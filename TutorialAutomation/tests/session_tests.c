@@ -11,6 +11,37 @@ static void parse_tests(void) {
     CHECK(!session_config_parse(L"{\"version\":2}", &c, error, sizeof(error)));
     CHECK(!session_config_parse(L"not json", &c, error, sizeof(error)));
 }
+static void clock_tests(void) {
+    SessionClock clock;
+    /* Explicit duration ignores a large prior Loggy3 total and excludes an explicit pause. */
+    session_clock_start(&clock, 20 * 60, 1, 100000, 500);
+    CHECK(session_clock_remaining_ms(&clock, 11 * 3600, 100000, 500) == 20 * 60000ULL);
+    CHECK(!session_clock_near(&clock, 11 * 3600, 75, 100000 + 18 * 60000ULL, 500));
+    CHECK(session_clock_near(&clock, 0, 75, 100000 + 19 * 60000ULL, 500));
+    CHECK(session_clock_elapsed_ms(&clock, 100000 + 20 * 60000ULL, 500 + 2 * 60000ULL) == 18 * 60000ULL);
+    CHECK(session_clock_remaining_ms(&clock, 0, 100000 + 20 * 60000ULL, 500 + 2 * 60000ULL) == 2 * 60000ULL);
+    session_clock_fallback(&clock);
+    CHECK(!clock.fallback && clock.duration_mode);
+
+    /* Without an override, Loggy3's confirmed daily total controls the target. */
+    session_clock_start(&clock, 630 * 60, 0, 200000, 0);
+    CHECK(session_clock_remaining_ms(&clock, 4 * 3600, 200000, 0) == 390 * 60000ULL);
+    CHECK(session_clock_near(&clock, 630 * 60 - 60, 75, 200000, 0));
+    session_clock_observe(&clock, 4 * 3600, 260000, 0);
+    session_clock_fallback(&clock);
+    CHECK(clock.fallback);
+    CHECK(session_clock_remaining_ms(&clock, 0, 260000, 0) == 390 * 60000ULL);
+    CHECK(session_clock_remaining_ms(&clock, 99999, 260000 + 5 * 60000ULL, 0) == 385 * 60000ULL);
+    session_clock_observe(&clock, 9 * 3600, 260000 + 5 * 60000ULL, 0);
+    CHECK(session_clock_remaining_ms(&clock, 0, 260000 + 5 * 60000ULL, 0) == 385 * 60000ULL);
+
+    /* If the recorder was never readable, the local clock gets the full default. */
+    session_clock_start(&clock, 615 * 60, 0, 500000, 0);
+    session_clock_fallback(&clock);
+    CHECK(!clock.has_recorded && clock.fallback);
+    CHECK(session_clock_remaining_ms(&clock, 0, 500000, 0) == 615 * 60000ULL);
+    CHECK(session_clock_remaining_ms(&clock, 0, 500000 + 60000ULL, 0) == 614 * 60000ULL);
+}
 static void shipped_tests(const wchar_t *path) {
     SessionConfig c;
     SessionPlan a, b;
@@ -78,6 +109,7 @@ static void shipped_tests(const wchar_t *path) {
 }
 int main(int argc, char **argv) {
     parse_tests();
+    clock_tests();
     if (argc > 1) {
         wchar_t path[MAX_PATH];
         MultiByteToWideChar(CP_ACP, 0, argv[1], -1, path, MAX_PATH);

@@ -7,4 +7,5 @@ TutorialAutomation/scripts/demo/tutorial-demo.exe
 /.tmp/
 /Excel Playback/
 /TutorialAutomation/profiles/progress/
-/programming_files/
+/programming_files/*
+!/programming_files/README.md

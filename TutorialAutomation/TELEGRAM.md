@@ -1,12 +1,12 @@
 # Telegram remote control
 
-`monitor.exe` runs next to `tutorial.exe` and connects playback to a Telegram bot. Use it to pause, resume, stop, start, and check playback without touching the playback machine. This is useful when the machine is only being watched through view-only RustDesk.
+`monitor.exe` runs next to `tutorial.exe` and connects playback to a configured Telegram chat. Use it to pause, resume, stop, start, and check playback without touching the playback machine. This is useful when the machine is only being watched through view-only RustDesk.
 
 The monitor never sends desktop input itself. It reads the playback log, takes screenshots on request, and passes `/pause`, `/resume`, and `/stop` to playback through named Windows events.
 
 ## One-time setup
 
-1. **Create a bot.** In Telegram, open **@BotFather** (blue checkmark), send `/newbot`, pick a name and a username ending in `bot`, and copy the token it gives you.
+1. **Create the Telegram connection.** In Telegram, open **@BotFather** (blue checkmark), send `/newbot`, choose a name and a username ending in `bot`, and copy the token it gives you. These are Telegram's required setup names.
 2. **Create `build\notify.json`** next to `monitor.exe`:
    ```json
    {
@@ -18,12 +18,12 @@ The monitor never sends desktop input itself. It reads the playback log, takes s
        "launcher": "../../start-reference-coding.cmd"
    }
    ```
-3. **Find your chat id.** Run `monitor.exe` from the `build` folder. With an empty `telegram_chat_id` it starts in setup mode. Open your bot, tap **Start**, and send any message; the bot replies with your chat id.
+3. **Find your chat id.** Run `monitor.exe` from the `build` folder. With an empty `telegram_chat_id` it starts in setup mode. Open the new Telegram chat, tap **Start**, and send any message; the monitor replies with your chat id.
 4. **Save the chat id.** Stop the monitor with Ctrl+C, put the number in `"telegram_chat_id": "123456789"`, and run `monitor.exe` again. Telegram shows **"Monitor started"**.
 
 | Setting | Meaning |
 |---|---|
-| `telegram_bot_token` | Token from @BotFather. Keep it secret: anyone with it can read the bot's messages and screenshots. If it leaks, send `/revoke` to @BotFather and paste the new token. |
+| `telegram_bot_token` | Token from @BotFather. Keep it secret: anyone with it can access the chat's messages and screenshots. If it leaks, send `/revoke` to @BotFather and paste the new token. |
 | `telegram_chat_id` | The only chat allowed to control the monitor. Messages from other chats are ignored and logged. |
 | `heartbeat_minutes` | Periodic status message; `0` = only on request (0-1440). |
 | `stall_minutes` | Alert when the playback log has not changed for this long (2-1440). |
@@ -36,13 +36,13 @@ The monitor never sends desktop input itself. It reads the playback log, takes s
 
 | Command | What it does |
 |---|---|
-| `/status` | Current file, progress, last checkpoint, last browser visit |
+| `/status` | Recorder state, session clock mode, current task, file progress, and recent browser visit |
 | `/screenshot` | JPEG of the whole desktop with a status caption |
 | `/log` | Status plus the last 25 playback log lines |
 | `/pause` | Same as F8: pauses at the next safe point (after any held key is released) |
 | `/resume` | Continues a paused playback |
 | `/stop` | Same as F9: releases input and stops; no automatic restart |
-| `/start` | Starts the configured `launcher` from `notify.json`. If it points to `start-session.cmd`, that session controls Loggy3 Start/Stop around the configured time target. `/run` still works the same. |
+| `/start` | Starts the configured `launcher` from `notify.json`. If it points to `start-session.cmd`, that session uses either `--duration-minutes N` or the daily Loggy3 target and continues if the recorder fails. `/run` still works the same. |
 
 Any other message returns the command list.
 
@@ -50,7 +50,7 @@ Any other message returns the command list.
 
 1. Make sure `monitor.exe` is running on the playback machine. It must be started **before** playback, or `/pause` and `/resume` cannot reach that run.
 2. Leave the desktop unlocked and untouched, with VS Code and Chrome not in the middle of a dialog.
-3. Send **`/start`**. The bot replies "Started", and playback begins after the launcher's 10-second countdown.
+3. Send **`/start`**. The monitor replies "Started", and playback begins after the launcher's 10-second countdown.
 4. After about a minute, send `/screenshot` or `/status` to confirm it is typing.
 
 `/start` refuses to start when playback is already running or when the desktop is locked or disconnected. It starts the launcher in its own console window, exactly like double-clicking the `.cmd`.
@@ -79,9 +79,9 @@ Press Win+R, type `shell:startup`, and create a shortcut to `build\monitor.exe` 
 
 Check screen capture locally without sending anything: `monitor.exe --screenshot test.jpg`. The monitor's own log is `logs\monitor.log`.
 
-## Optional one-time setup on the playback machine: `setup-bot.cmd`
+## Optional one-time setup on the playback machine: `setup-monitor.cmd`
 
-Run `setup-bot.cmd` from the repository root once, and accept the administrator prompt. It sets up:
+Run `setup-monitor.cmd` from the repository root once, and accept the administrator prompt. It sets up:
 
 - **A scheduled task** `\TutorialAutomation\SwitchToConsole` that runs `switch-to-console.cmd --quiet`
   with administrator rights, so nothing has to be clicked later.
@@ -92,8 +92,8 @@ With that in place, `/start` first checks the session:
 
 - **Through Remote Desktop, or disconnected or locked:** it runs the task. The session moves to the
   console and stays unlocked, and the resolution watcher keeps it at 1920x1080. An open RDP window
-  closes; reconnect with RDP or RustDesk later. The bot says so in Telegram.
+  closes; reconnect with RDP or RustDesk later. The monitor reports this in Telegram.
 - **Already on the console:** nothing changes.
 
 Then it starts the launcher as before. Without the setup, `/start` still works on an unlocked
-desktop, and says to run `setup-bot.cmd` when it would have needed the switch.
+desktop, and says to run `setup-monitor.cmd` when it would have needed the switch.

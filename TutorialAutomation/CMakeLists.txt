@@ -71,6 +71,8 @@ add_test(NAME side_apps_tests COMMAND side_apps_tests ${CMAKE_CURRENT_SOURCE_DIR
 add_test(NAME loggy3_tests COMMAND loggy3_tests)
 add_test(NAME session_tests COMMAND session_tests ${CMAKE_CURRENT_SOURCE_DIR}/profiles/session.json)
 add_test(NAME dry_run_session COMMAND tutorial --dry-run-session 1 --seed 7 --profiles ${CMAKE_CURRENT_SOURCE_DIR}/profiles/profiles.json)
+add_test(NAME dry_run_session_duration COMMAND tutorial --dry-run-session 1 --seed 7 --duration-minutes 20 --profiles ${CMAKE_CURRENT_SOURCE_DIR}/profiles/profiles.json)
+set_tests_properties(dry_run_session_duration PROPERTIES PASS_REGULAR_EXPRESSION "run for 0h 20m from launch")
 add_test(NAME project_tests COMMAND project_tests ${CMAKE_CURRENT_SOURCE_DIR}/profiles/programming.json)
 add_test(NAME dry_run_code COMMAND tutorial --dry-run-code 1 --profiles ${CMAKE_CURRENT_SOURCE_DIR}/profiles/profiles.json --programming ${CMAKE_CURRENT_SOURCE_DIR}/profiles/programming.json)
 add_test(NAME profile_tests COMMAND profile_tests ${CMAKE_CURRENT_SOURCE_DIR}/profiles/profiles.json)

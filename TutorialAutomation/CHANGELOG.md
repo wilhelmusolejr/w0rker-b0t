@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31
+
+### Combined session timing
+
+- Added `--duration-minutes N` for a local session budget independent of Loggy3's daily total. Preparation, work, breaks, idles, and ending count; explicit pauses do not. A short run can be previewed with `--dry-run-session 1 --duration-minutes 20`.
+- The default still targets 10h15m–10h45m of daily Loggy3 time. If the recorder cannot open, be read, start, or stay recording, the session switches to a local countdown for the last known remaining amount. If today's total was never readable, it uses the full selected target and logs that assumption. Work continues after recording failure.
+- Recorder recovery is limited to two spaced attempts. The monitor now identifies the session clock separately from Loggy3's state. Added input-free clock tests; combined live session validation is pending.
+- Updated the project guides and optional monitor setup names to describe a single-session accessibility automation and AI helper learning project.
+
 ## 2026-10-16
 
 ### Fixed
@@ -14,7 +23,7 @@
 - Regression test in `tests/playback_controls_tests.c`: a pause requested while Enter is held returns without stopping and is recorded as deferred.
 - **Class demo** ([CLASS_DEMO.md](CLASS_DEMO.md)): `start-class-demo.cmd`, `scripts/class-demo.json`, two teaching programs, and a GitHub link list of professors' and educators' projects. About 6-9 minutes per run.
 - **Telegram guide** ([TELEGRAM.md](TELEGRAM.md)): setup, commands, starting playback with `/run`, and troubleshooting for the existing `monitor.exe`.
-- `build/notify.json` configured for the bot (not committed; `build/` is ignored).
+- `build/notify.json` configured for the Telegram monitor (not committed; `build/` is ignored).
 - **`switch-to-console.cmd`** (in `worken`) hands the RDP session to the console with `tscon` instead of disconnecting it, so the desktop stays unlocked for RustDesk. It asks for admin rights itself.
 - **`tools/set_resolution.c`** builds `set_resolution.exe`, which sets the primary display to a fixed size (default 1920x1080) so the layout matches RDP. `switch-to-console.cmd` runs it right after the switch and logs to `logs\resolution.log`. Use `set_resolution --list` to see the displays and the modes they support. On this VM the console's Basic Display Driver only offers 640x480. When the main display can't show the requested size, the tool moves the desktop onto a display that can and turns the other displays off. If no display can show it, the tool plugs in its own virtual monitor through the Amyuni driver that RustDesk ships (interface `{b5ffd75f-da40-4353-8ff8-b6daf6f1d8ca}`, control code `2307084`, the same request RustDesk sends). That monitor stays when RustDesk disconnects. With `--watch`, the tool re-checks every 5 seconds and re-applies the size whenever it drifts; `switch-to-console.cmd` starts it this way. In an RDP session it changes nothing, because the RDP client sets that size.
 

@@ -30,7 +30,7 @@ typedef struct {
     long long offset;
     char partial[1024];
     char time[16], current_file[200], checkpoint[64], last_visit[400], next_visit[64];
-    char task[200], target[32]; /* from a work session's SESSION TASK / SESSION TARGET lines */
+    char task[200], target[32], session_clock[160]; /* from session log lines */
     char tail[TAIL_LINES][400];
     char reason[800];
     unsigned tail_count, tail_next;
@@ -75,7 +75,7 @@ static int load_config(const wchar_t *path) {
     if (!json_keys(root, keys, 6)) { fputs("notify.json has an unknown setting\n", stderr); goto done; }
     v = json_get(root, L"telegram_bot_token");
     if (!v || v->kind != JSON_STRING || wcslen(v->string) < 20 || wcslen(v->string) > 120 || !wcschr(v->string, L':')) {
-        fputs("telegram_bot_token is missing; create a bot with @BotFather and paste its token\n", stderr); goto done;
+        fputs("telegram_bot_token is missing; create a Telegram token with @BotFather and paste it\n", stderr); goto done;
     }
     for (i = 0; v->string[i]; ++i) {
         wchar_t ch = v->string[i];
@@ -366,8 +366,16 @@ static int read_line(char *line, char *event, size_t capacity) {
         state.current_file[0] = 0;
     } else if (!strncmp(message, "SESSION TARGET: ", 16)) {
         char *end;
-        copy_after(state.target, sizeof(state.target), message, "SESSION TARGET: ");
-        if ((end = strstr(state.target, " today"))) *end = 0;
+        const char *value = message + 16;
+        if ((end = strstr(value, " today"))) {
+            snprintf(state.target, sizeof(state.target), "%.*s", (int)(end - value), value);
+            snprintf(state.session_clock, sizeof(state.session_clock), "Loggy3 daily target %s", state.target);
+        } else if ((end = strstr(value, " duration"))) {
+            state.target[0] = 0;
+            snprintf(state.session_clock, sizeof(state.session_clock), "run duration %.*s", (int)(end - value), value);
+        }
+    } else if (!strncmp(message, "SESSION CLOCK: ", 15)) {
+        copy_after(state.session_clock, sizeof(state.session_clock), message, "SESSION CLOCK: ");
     } else if (!strncmp(message, "SESSION ALERT: ", 15)) {
         snprintf(event, capacity, "ALERT: %s", message + 15);
     } else if (!strncmp(message, "SESSION SUMMARY: ", 17)) {
@@ -492,9 +500,11 @@ static void status_text(char *out, size_t capacity, int with_tail) {
     EnterCriticalSection(&state_lock);
     idle = state.last_change ? (GetTickCount64() - state.last_change) / 60000 : 0;
     /* "Now:" only during a work session; other playback keeps its File line below. */
-    if (*state.task) used = (size_t)snprintf(out, capacity, "%sNow: %s%s%s\n", loggy, state.task,
+    used = (size_t)snprintf(out, capacity, "%s%s%s%s", loggy,
+        *state.session_clock ? "Session: " : "", state.session_clock,
+        *state.session_clock ? "\n" : "");
+    if (*state.task && used < capacity) used += (size_t)snprintf(out + used, capacity - used, "Now: %s%s%s\n", state.task,
         *state.current_file ? " | " : "", state.current_file);
-    else used = (size_t)snprintf(out, capacity, "%s", loggy);
     if (used < capacity) used += (size_t)snprintf(out + used, capacity - used,
         "Playback: %s\nDesktop: %s\nFile: %s\nProgress: %s characters\nNext browser visit: %s\nLast visit: %s\n"
         "Last log line: %s (%llu min ago)",
@@ -521,7 +531,7 @@ static int signal_playback(const wchar_t *name) {
     return ok;
 }
 /* Through Remote Desktop, or with the session disconnected, the desktop locks as soon as the RDP
-   window closes and playback cannot continue. The scheduled task from setup-bot.cmd runs
+   window closes and playback cannot continue. The scheduled task from setup-monitor.cmd runs
    switch-to-console.cmd as administrator (no prompt): the session moves to the console and stays
    unlocked, and the resolution watcher starts. Returns 1 when the desktop is ready afterwards. */
 static int switch_to_console(char *note, size_t capacity) {
@@ -540,7 +550,7 @@ static int switch_to_console(char *note, size_t capacity) {
     GetExitCodeProcess(process.hProcess, &code);
     CloseHandle(process.hThread); CloseHandle(process.hProcess);
     if (code) {
-        snprintf(note, capacity, "The switch-to-console task is not set up: run setup-bot.cmd once on this machine.");
+        snprintf(note, capacity, "The switch-to-console task is not set up: run setup-monitor.cmd once on this machine.");
         return window_desktop_ready();
     }
     send_text("Moving this session to the console so the desktop stays unlocked (an open RDP window closes).");
@@ -596,8 +606,8 @@ static void run_launcher(char *reply, size_t capacity) {
         snprintf(reply, capacity, "Could not start the launcher (error %lu).", GetLastError()); return;
     }
     CloseHandle(process.hThread); CloseHandle(process.hProcess);
-    snprintf(reply, capacity, "Started. It begins after a 10-second countdown; a work session then starts the "
-        "Loggy3 recording and works until today's target. Send /status in a minute.");
+    snprintf(reply, capacity, "Started. After the launcher's countdown, a work session follows its configured duration "
+        "or daily target and continues if Loggy3 is unavailable. Send /status in a minute.");
 }
 static void handle_command(const char *chat, const char *text) {
     char command[32], reply[4000];
@@ -621,8 +631,8 @@ static void handle_command(const char *chat, const char *text) {
         if (!tutorial_running()) send_text("Playback is not running.");
         else if (!signal_playback(name)) send_text("Playback is running but did not accept remote commands (restart it with the new build).");
         else send_text(command[1] == 'p' ? "Pause sent. Playback pauses at its next safe point; /resume continues." :
-            command[1] == 'r' ? "Resume sent." : "Stop sent. A work session finishes its line, saves, runs its ending and stops the "
-            "Loggy3 recording; other playback releases input and stops at once. /start starts it again.");
+            command[1] == 'r' ? "Resume sent." : "Stop sent. A work session finishes its line, saves, runs its ending and "
+            "stops a confirmed Loggy3 recording; other playback releases input and stops at once. /start starts it again.");
     } else if (!strcmp(command, "/start") || !strcmp(command, "/run")) { run_launcher(reply, sizeof(reply)); send_text(reply); }
     else send_text("Commands:\n/status - progress and state\n/screenshot - picture of the desktop\n/log - recent log lines\n"
         "/start - start the day (the launcher in notify.json: the work session)\n"
@@ -740,7 +750,7 @@ int main(void) {
     SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
     EnterCriticalSection(&state_lock); poll_log(1, events, &event_count); LeaveCriticalSection(&state_lock);
     if (!*cfg.chat) {
-        puts("Setup mode: send any message to your bot in Telegram; it replies with your chat id.");
+        puts("Setup mode: send any message to the configured Telegram chat; the monitor replies with your chat id.");
         note("monitor started in setup mode");
     } else {
         char text[4000];

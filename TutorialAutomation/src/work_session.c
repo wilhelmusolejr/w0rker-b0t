@@ -116,7 +116,50 @@ int session_config_load(const wchar_t *path, SessionConfig *c, char *error, size
     return ok;
 }
 
-/* ---------- the day's plan ---------- */
+/* ---------- session plan and clocks ---------- */
+
+void session_clock_start(SessionClock *clock, unsigned target_seconds, int duration_mode,
+                         ULONGLONG now_ms, ULONGLONG paused_ms) {
+    memset(clock, 0, sizeof(*clock));
+    clock->target_seconds = target_seconds;
+    clock->duration_mode = duration_mode != 0;
+    clock->started_ms = now_ms;
+    clock->paused_at_start_ms = paused_ms;
+}
+ULONGLONG session_clock_elapsed_ms(const SessionClock *clock, ULONGLONG now_ms, ULONGLONG paused_ms) {
+    ULONGLONG wall = now_ms >= clock->started_ms ? now_ms - clock->started_ms : 0;
+    ULONGLONG paused = paused_ms >= clock->paused_at_start_ms ? paused_ms - clock->paused_at_start_ms : 0;
+    return wall > paused ? wall - paused : 0;
+}
+void session_clock_observe(SessionClock *clock, long recorded_seconds, ULONGLONG now_ms, ULONGLONG paused_ms) {
+    if (recorded_seconds < 0) return;
+    clock->last_recorded_seconds = recorded_seconds;
+    clock->last_seen_elapsed_ms = session_clock_elapsed_ms(clock, now_ms, paused_ms);
+    clock->has_recorded = 1;
+}
+void session_clock_fallback(SessionClock *clock) {
+    ULONGLONG remaining;
+    if (clock->duration_mode || clock->fallback) return;
+    remaining = clock->has_recorded && clock->last_recorded_seconds < (long)clock->target_seconds
+        ? clock->target_seconds - (unsigned)clock->last_recorded_seconds
+        : clock->has_recorded ? 0 : clock->target_seconds;
+    clock->fallback_due_ms = (clock->has_recorded ? clock->last_seen_elapsed_ms : 0) + remaining * 1000ULL;
+    clock->fallback = 1;
+}
+ULONGLONG session_clock_remaining_ms(const SessionClock *clock, long recorded_seconds,
+                                     ULONGLONG now_ms, ULONGLONG paused_ms) {
+    if (clock->duration_mode || clock->fallback) {
+        ULONGLONG due = clock->duration_mode ? clock->target_seconds * 1000ULL : clock->fallback_due_ms;
+        ULONGLONG elapsed = session_clock_elapsed_ms(clock, now_ms, paused_ms);
+        return due > elapsed ? due - elapsed : 0;
+    }
+    return recorded_seconds < (long)clock->target_seconds
+        ? (clock->target_seconds - (unsigned)(recorded_seconds < 0 ? 0 : recorded_seconds)) * 1000ULL : 0;
+}
+int session_clock_near(const SessionClock *clock, long recorded_seconds, unsigned reserve_seconds,
+                       ULONGLONG now_ms, ULONGLONG paused_ms) {
+    return session_clock_remaining_ms(clock, recorded_seconds, now_ms, paused_ms) <= reserve_seconds * 1000ULL;
+}
 
 unsigned session_pick(const unsigned *w, unsigned count, MotionRng *rng) {
     unsigned total = 0, i, roll;
@@ -201,42 +244,48 @@ static void clock_at(ULONGLONG offset_seconds, char *out, size_t cap) {
     SystemTimeToTzSpecificLocalTime(NULL, &utc, &local);
     snprintf(out, cap, "%02u:%02u", local.wHour, local.wMinute);
 }
-void session_print_plan(const SessionConfig *c, const SessionPlan *plan, const Profile *profile, unsigned recorded) {
+void session_print_plan(const SessionConfig *c, const SessionPlan *plan, const Profile *profile,
+                        unsigned recorded, int duration_mode) {
     char name[160], a[32], b[32], when[16];
     unsigned i, k = 0, idle_total = 0, remaining = plan->target_seconds > recorded ? plan->target_seconds - recorded : 0;
     ULONGLONG at = 60, end_at;
     WideCharToMultiByte(CP_UTF8, 0, profile->name, -1, name, sizeof(name), NULL, NULL);
     hm(recorded, a, sizeof(a)); hm(plan->target_seconds, b, sizeof(b));
-    printf("Session for %s: today so far %s (Loggy3), target %s", name, a, b);
-    hm(remaining, a, sizeof(a)); printf(", to record now %s.\n", a);
-    if (!remaining) { puts("The target is already reached: a live run would press nothing and end."); return; }
-    printf("Start look: %s%s%s; then Loggy3 Start, and Loggy3 is %s.\n", session_start_look_name(plan->start),
+    if (duration_mode) printf("Session for %s: run for %s from launch; Loggy3 recording is optional.\n", name, b);
+    else {
+        printf("Session for %s: today so far %s (Loggy3), target %s", name, a, b);
+        hm(remaining, a, sizeof(a)); printf(", to record now %s.\n", a);
+    }
+    if (!remaining) { puts("The daily target is already reached: a live run would press nothing and end."); return; }
+    printf("Start look: %s%s%s%s; then attempt Loggy3 Start, and Loggy3 is %s if available.\n", session_start_look_name(plan->start),
         plan->start == START_APP ? " (" : "", plan->start == START_APP ? side_app_name(plan->start_app) : "",
-        plan->minimize_loggy ? "minimized" : "left behind the work");
-    if (plan->start == START_APP) printf("  The start app is %s after recording starts.\n", plan->close_start_app ? "closed" : "left open");
+        plan->start == START_APP ? ")" : "", plan->minimize_loggy ? "minimized" : "left behind the work");
+    if (plan->start == START_APP) printf("  The start app is %s after preparation.\n", plan->close_start_app ? "closed" : "left open");
     for (i = 0; i < plan->idle_count; ++i) idle_total += plan->idles[i].seconds;
     printf("Timeline (times are approximate; other-app breaks of %u-%u min happen inside slots;\n"
-        "idles away from the desk: %u, %u min in all, counted in the target):\n",
+        "idles away from the desk: %u, %u min in all, counted in the session):\n",
         c->break_minutes[0], c->break_minutes[1], plan->idle_count, (idle_total + 30) / 60);
-    end_at = at + remaining;
+    end_at = duration_mode ? remaining : at + remaining;
     for (i = 0; i < plan->slot_count && at < end_at; ++i) {
         ULONGLONG slot_end = at + plan->slots[i].minutes * 60ULL;
         clock_at(at, when, sizeof(when));
         printf("  %s  %-9s %3u min%s\n", when, plan->slots[i].coding ? "CODING" : "BROWSING", plan->slots[i].minutes,
             slot_end > end_at ? "  (cut short: target reached)" : "");
-        /* Idles are timed by recorded work since Loggy3 Start, which begins with the first slot. */
+        /* Idles are timed by local active work after preparation. */
         for (; k < plan->idle_count && 60 + plan->idles[k].at < slot_end && 60 + plan->idles[k].at < end_at; ++k) {
             clock_at(60 + plan->idles[k].at, when, sizeof(when));
             printf("  %s    idle (away from the desk) %u min %02u s\n", when, plan->idles[k].seconds / 60, plan->idles[k].seconds % 60);
         }
         at = slot_end;
     }
-    clock_at(end_at > c->ending_reserve_seconds ? end_at - c->ending_reserve_seconds : end_at, when, sizeof(when));
+    { unsigned reserve = c->ending_reserve_seconds;
+      if (duration_mode && reserve > plan->target_seconds / 5) reserve = plan->target_seconds / 5;
+      clock_at(end_at > reserve ? end_at - reserve : end_at, when, sizeof(when)); }
     printf("  %s  ENDING    %s", when, session_end_look_name(plan->end));
     if (plan->end == END_CLOSE_SOME) printf(" (%u)", plan->close_count);
-    printf("; each app closed by X / Alt+F4 / taskbar menu at random; then Loggy3 Stop, Loggy3 %s.\n", session_after_stop_name(plan->after));
+    printf("; each app closed by X / Alt+F4 / taskbar menu at random; then Loggy3 Stop if recording, Loggy3 %s.\n", session_after_stop_name(plan->after));
     clock_at(end_at, when, sizeof(when));
-    printf("  %s  recording stopped near the target; summary to the log and Telegram.\n", when);
+    printf("  %s  session target reached; summary to the log and optional Telegram monitor.\n", when);
 }
 
 /* ---------- running ---------- */
@@ -251,10 +300,11 @@ typedef struct {
     ProjectHistory history;
     int history_loaded, coding_done;
     long t0, banked, last_timer;
-    unsigned stopped_seen, restarts, files_done, failures, slot;
-    int recording, loggy_lost, target_reached;
+    unsigned stopped_seen, read_failures, retry_count, restarts, files_done, failures, slot;
+    int recording, loggy_lost, loggy_unavailable, target_reached, work_started;
+    ULONGLONG next_loggy_retry_ms, work_start_elapsed_ms;
+    SessionClock clock;
     ULONGLONG coding_ms, browsing_ms;
-    long work_start;          /* recorded seconds when this session's recording began */
     unsigned next_idle, idles_taken, idle_seconds;
     char last_task[160];      /* restored on Telegram after an idle */
 } Run;
@@ -267,53 +317,123 @@ static void hms(long seconds, char *out, size_t cap) {
 }
 static int stopped_by_user(Playback *p) { return InterlockedCompareExchange(&p->user_stop, 0, 0) != 0; }
 static int winding_down(Playback *p) { return InterlockedCompareExchange(&p->wind_down, 0, 0) != 0; }
+static unsigned ending_reserve(const Run *r) {
+    unsigned reserve = r->s->config->ending_reserve_seconds;
+    if ((r->clock.duration_mode || r->clock.fallback) && reserve > r->clock.target_seconds / 5)
+        reserve = r->clock.target_seconds / 5;
+    return reserve;
+}
+static void note_fallback(Run *r, const char *reason) {
+    char remaining[32];
+    ULONGLONG ms;
+    if (r->loggy_unavailable) return;
+    r->loggy_unavailable = 1;
+    r->recording = 0;
+    session_clock_fallback(&r->clock);
+    ms = session_clock_remaining_ms(&r->clock, recorded(r), GetTickCount64(), r->p->paused_ms);
+    hms((long)((ms + 999) / 1000), remaining, sizeof(remaining));
+    playback_log(r->p, "SESSION ALERT: Loggy3 %s; continuing the session without confirmed recording", reason);
+    if (r->clock.duration_mode) {
+        hms((long)r->clock.target_seconds, remaining, sizeof(remaining));
+        playback_log(r->p, "SESSION CLOCK: run duration %s; Loggy3's state cannot change the deadline", remaining);
+    }
+    else {
+        playback_log(r->p, "SESSION CLOCK: local fallback, about %s remaining%s", remaining,
+            r->clock.has_recorded ? " from the last confirmed total" : " (today's total was unavailable; using the full target)");
+    }
+}
+static void check_target(Run *r) {
+    Playback *p = r->p;
+    char text[32];
+    if (r->target_reached || !session_clock_near(&r->clock, recorded(r), ending_reserve(r),
+            GetTickCount64(), p->paused_ms)) return;
+    r->target_reached = 1;
+    if (r->clock.duration_mode) playback_log(p, "session duration is near; finishing at a safe point");
+    else if (r->clock.fallback) playback_log(p, "local fallback deadline is near; finishing at a safe point");
+    else {
+        hms(recorded(r), text, sizeof(text));
+        playback_log(p, "today's recorded time is %s; the target is near, ending the day", text);
+    }
+    InterlockedExchange(&p->yield, 1);
+}
 
-/* Every check_seconds while working: follow Loggy3's timer, notice a recording that stopped by
-   itself, and ask the current task to end once the target is near. Reads only; no input. */
+/* Every check_seconds: enforce the independent clock, inspect Loggy3 without input, and request
+   a safe point if recording needs a bounded recovery attempt. */
 static void watch(Playback *p) {
     Run *r = watching;
     LoggySnapshot s;
     HWND w;
     LoggyState state;
-    if (!r || !r->recording || !(w = loggy_window(NULL)) || !loggy_snapshot(w, &s)) return;
-    state = loggy_recording_state(&s, NULL);
-    if (state == LOGGY_RECORDING) {
-        long timer = loggy_timer_seconds(s.timer);
-        /* Loggy3 sometimes starts a new recording part while it keeps recording: the timer goes back
-           to zero and the earlier part moves into the day's total. Bank it, or the day would come up short. */
-        if (timer >= 0 && timer + 5 < r->last_timer) {
-            char text[32];
-            r->banked += r->last_timer;
-            hms(recorded(r) + timer, text, sizeof(text));
-            playback_log(p, "Loggy3's timer restarted at %s (was %lds); counting the earlier part, today %s",
-                s.timer, r->last_timer, text);
+    if (!r) return;
+    check_target(r);
+    if (r->target_reached) return;
+    w = loggy_window(NULL);
+    if (!w || !loggy_snapshot(w, &s)) {
+        if (r->recording && ++r->read_failures >= 2) {
+            r->banked += r->last_timer; r->last_timer = 0;
+            note_fallback(r, "became unreadable");
         }
-        if (timer >= 0) r->last_timer = timer;
-        r->stopped_seen = 0;
-    } else if (state == LOGGY_STOPPED && ++r->stopped_seen >= 2 && !r->loggy_lost) {
-        char text[32];
-        hms(recorded(r), text, sizeof(text));
+    } else {
+        state = loggy_recording_state(&s, NULL);
+        if (state == LOGGY_RECORDING) {
+            long timer = loggy_timer_seconds(s.timer);
+            if (timer < 0) {
+                if (r->recording && ++r->read_failures >= 2) {
+                    r->banked += r->last_timer; r->last_timer = 0;
+                    note_fallback(r, "timer became unreadable");
+                    r->next_loggy_retry_ms = GetTickCount64();
+                }
+            } else {
+                r->read_failures = 0;
+                /* Loggy3 can start a new recording part while it keeps recording. */
+                if (timer + 5 < r->last_timer) {
+                    char text[32];
+                    r->banked += r->last_timer;
+                    hms(recorded(r) + timer, text, sizeof(text));
+                    playback_log(p, "Loggy3's timer restarted at %s (was %lds); counting the earlier part, today %s",
+                        s.timer, r->last_timer, text);
+                }
+                r->last_timer = timer;
+                if (r->loggy_unavailable) {
+                    r->loggy_unavailable = 0; r->loggy_lost = 0;
+                    playback_log(p, "SESSION ALERT: Loggy3 is recording again; the local session deadline is unchanged");
+                }
+                r->recording = 1;
+                r->stopped_seen = 0;
+                if (!r->clock.fallback) session_clock_observe(&r->clock, recorded(r), GetTickCount64(), p->paused_ms);
+            }
+        } else if (state == LOGGY_STOPPED) {
+            r->read_failures = 0;
+            if (r->recording && ++r->stopped_seen >= 2) {
+                r->banked += r->last_timer; r->last_timer = 0;
+                note_fallback(r, "stopped recording");
+                r->next_loggy_retry_ms = GetTickCount64();
+            }
+        } else if (r->recording && ++r->read_failures >= 2) {
+            r->banked += r->last_timer; r->last_timer = 0;
+            note_fallback(r, "state became unknown");
+            r->next_loggy_retry_ms = GetTickCount64();
+        }
+    }
+    if (r->loggy_unavailable && r->retry_count < 2 && GetTickCount64() >= r->next_loggy_retry_ms &&
+        !r->loggy_lost) {
         r->loggy_lost = 1;
-        playback_log(p, "SESSION ALERT: Loggy3 stopped recording by itself (today %s); restarting it", text);
         InterlockedExchange(&p->yield, 1);
     }
-    if (!r->target_reached && recorded(r) + (long)r->s->config->ending_reserve_seconds >= (long)r->plan.target_seconds) {
-        char text[32];
-        hms(recorded(r), text, sizeof(text));
-        r->target_reached = 1;
-        playback_log(p, "today's recorded time is %s; the target is near, ending the day", text);
-        InterlockedExchange(&p->yield, 1);
-    }
+    check_target(r);
 }
 
 /* After an error: clear a stop that the user did not ask for, and wait out a locked desktop. */
 static int recover(Playback *p) {
+    ULONGLONG unavailable_since = 0;
     if (stopped_by_user(p)) return 0;
     playback_release(p);
     while (!window_desktop_ready()) {
         if (stopped_by_user(p)) return 0;
+        if (!unavailable_since) unavailable_since = GetTickCount64();
         Sleep(1000);
     }
+    if (unavailable_since) p->paused_ms += GetTickCount64() - unavailable_since;
     InterlockedExchange(&p->stopped, 0);
     return window_fix_target(p);
 }
@@ -324,8 +444,7 @@ static void task(Run *r, const char *what, unsigned minutes) {
     else snprintf(r->last_task, sizeof(r->last_task), "%s", what);
     playback_log(r->p, "SESSION TASK: %s", r->last_task);
 }
-/* Away from the desk: no input for a while, now and then one small nudge of the mouse halfway,
-   like sitting back down. Ends early when the day has to end. Loggy3 keeps recording. */
+/* Away from the desk: no input for a while, with an optional small mouse nudge. */
 static int idle(Run *r, unsigned seconds) {
     Playback *p = r->p;
     unsigned waited = 0, nudge_at = motion_chance(&r->rng, 30) ? seconds * motion_between(&r->rng, 40, 80) / 100 : 0;
@@ -349,12 +468,13 @@ static int idle(Run *r, unsigned seconds) {
     if (*r->last_task) playback_log(p, "SESSION TASK: %s", r->last_task);
     return 1;
 }
-/* Called at safe points (coding checkpoints, between browsing steps, between slots): take the next
-   planned idle once enough work has been recorded since Loggy3 Start. */
+/* Called at safe points: take an idle once enough active work time has passed. */
 static int safe_point(Playback *p) {
     Run *r = watching;
-    if (!r || !r->recording || r->next_idle >= r->plan.idle_count || playback_yield(p)) return 1;
-    if (recorded(r) - r->work_start < (long)r->plan.idles[r->next_idle].at) return 1;
+    ULONGLONG elapsed;
+    if (!r || !r->work_started || r->next_idle >= r->plan.idle_count || playback_yield(p)) return 1;
+    elapsed = session_clock_elapsed_ms(&r->clock, GetTickCount64(), p->paused_ms);
+    if (elapsed < r->work_start_elapsed_ms + r->plan.idles[r->next_idle].at * 1000ULL) return 1;
     return idle(r, r->plan.idles[r->next_idle++].seconds);
 }
 
@@ -548,6 +668,19 @@ static int loggy(Run *r, LoggyAction action, int minimize_after) {
     if (action == LOGGY_RECORD || action == LOGGY_STOP) return ok && job.result == (action == LOGGY_RECORD ? LOGGY_RECORDING : LOGGY_STOPPED);
     return ok;
 }
+/* A Start can succeed even if a later window action fails. Read state again before declaring failure. */
+static int loggy_recording_confirmed(Run *r) {
+    HWND w = loggy_window(NULL);
+    LoggySnapshot snapshot;
+    long timer;
+    if (!w || !loggy_snapshot(w, &snapshot) || loggy_recording_state(&snapshot, NULL) != LOGGY_RECORDING ||
+        (timer = loggy_timer_seconds(snapshot.timer)) < 0) return 0;
+    r->recording = 1;
+    r->loggy_unavailable = 0;
+    r->last_timer = timer;
+    if (!r->clock.fallback) session_clock_observe(&r->clock, recorded(r), GetTickCount64(), r->p->paused_ms);
+    return 1;
+}
 static int read_today(Run *r, LoggyToday *today) {
     HWND w = loggy_window(NULL);
     unsigned tries;
@@ -558,33 +691,45 @@ static int read_today(Run *r, LoggyToday *today) {
     }
     return 0;
 }
-/* Loggy3 stopped by itself: bank what it recorded, then Start again (once more after a wait). */
-static int restart_loggy(Run *r) {
+/* A failed recorder is retried at most twice, between work actions. No wait blocks the session. */
+static int retry_loggy(Run *r) {
     Playback *p = r->p;
-    unsigned attempt;
-    r->banked += r->last_timer; r->last_timer = 0; r->stopped_seen = 0; r->loggy_lost = 0;
-    for (attempt = 0; attempt < 2; ++attempt) {
-        if (attempt) {
-            playback_log(p, "SESSION ALERT: Loggy3 did not start recording; trying again in %u s", r->s->config->restart_wait_seconds);
-            if (!playback_wait(p, r->s->config->restart_wait_seconds * 1000)) return 0;
+    LoggyToday today;
+    ++r->retry_count;
+    r->loggy_lost = 0;
+    r->next_loggy_retry_ms = GetTickCount64() + r->s->config->restart_wait_seconds * 1000ULL;
+    playback_log(p, "trying Loggy3 recording again (%u of 2)", r->retry_count);
+    if (!loggy_window(NULL)) {
+        if (start_menu_open(p, &r->rng, L"Loggy3") != 1 || !playback_wait(p, 8000)) {
+            if (stopped_by_user(p) || !recover(p)) return 0;
+            goto failed;
         }
-        if (loggy(r, LOGGY_RECORD, 1)) {
-            ++r->restarts;
-            playback_log(p, "SESSION ALERT: Loggy3 is recording again");
-            return 1;
-        }
-        if (!recover(p)) return 0;
     }
-    playback_log(p, "SESSION ALERT: Loggy3 could not be restarted; ending the day");
-    r->recording = 0;
-    return 0;
+    if (loggy(r, LOGGY_RECORD, 1) || loggy_recording_confirmed(r)) {
+        int read_ok;
+        ++r->restarts;
+        r->recording = 1; r->loggy_unavailable = 0; r->stopped_seen = 0;
+        read_ok = read_today(r, &today);
+        if (!read_ok && (stopped_by_user(p) || !recover(p))) return 0;
+        if (read_ok && today.found) {
+            r->t0 = (long)today.day.seconds; r->banked = 0;
+            r->last_timer = today.timer_seconds > 0 ? today.timer_seconds : 0;
+        }
+        playback_log(p, "SESSION ALERT: Loggy3 is recording again; the local session deadline is unchanged");
+        return 1;
+    }
+    if (stopped_by_user(p) || !recover(p)) return 0;
+failed:
+    playback_log(p, "SESSION ALERT: Loggy3 retry failed; continuing work%s",
+        r->retry_count < 2 ? " and will retry once more later" : " without further automatic attempts");
+    return 1;
 }
 
 /* ---------- start and end ---------- */
 
 static int start_look(Run *r) {
     Playback *p = r->p;
-    task(r, "getting ready to record", 0);
+    task(r, "getting ready for the session", 0);
     playback_log(p, "start look: %s", session_start_look_name(r->plan.start));
     switch (r->plan.start) {
         case START_DESKTOP: return coding_step_show_desktop(p);
@@ -622,24 +767,34 @@ static int end_look(Run *r) {
 }
 static void summary(Run *r, const char *ending) {
     LoggyToday today;
-    char total[32], target[32], coding[32], browsing[32], idled[32], name[160];
-    long seconds = recorded(r);
+    char total[48], target[32], elapsed[32], coding[32], browsing[32], idled[32], name[160];
+    long seconds = r->clock.has_recorded ? r->clock.last_recorded_seconds : -1;
+    int fresh = 0;
     HWND w = loggy_window(NULL);
-    if (w && loggy_today(w, NULL, &today) && today.found && loggy_today_seconds(&today) >= seconds) seconds = loggy_today_seconds(&today);
-    hms(seconds, total, sizeof(total)); hms((long)r->plan.target_seconds, target, sizeof(target));
+    if (w && loggy_today(w, NULL, &today) && today.found) {
+        seconds = loggy_today_seconds(&today);
+        fresh = 1;
+    }
+    if (seconds >= 0) hms(seconds, total, sizeof(total)); else snprintf(total, sizeof(total), "unavailable");
+    hms((long)r->plan.target_seconds, target, sizeof(target));
+    hms((long)(session_clock_elapsed_ms(&r->clock, GetTickCount64(), r->p->paused_ms) / 1000), elapsed, sizeof(elapsed));
     hms((long)(r->coding_ms / 1000), coding, sizeof(coding)); hms((long)(r->browsing_ms / 1000), browsing, sizeof(browsing));
     hms((long)r->idle_seconds, idled, sizeof(idled));
     WideCharToMultiByte(CP_UTF8, 0, r->s->profile->local_id, -1, name, sizeof(name), NULL, NULL);
-    playback_log(r->p, "SESSION SUMMARY: %s %s. Today %s recorded (target %s). Coding %s, browsing %s (slot times include "
-        "breaks and idles), other-app breaks %u, idles %u (%s). Files finished %u. Loggy3 auto-restarts %u. Ending: %s.", name, ending,
-        total, target, coding, browsing, r->timer.breaks, r->idles_taken, idled, r->files_done, r->restarts, session_end_look_name(r->plan.end));
+    playback_log(r->p, "SESSION SUMMARY: %s %s. Session elapsed %s; %s %s%s. Loggy3 %s %s. Coding %s, browsing %s "
+        "(slot times include breaks and idles), other-app breaks %u, idles %u (%s). Files finished %u. Loggy3 restarts %u. Ending: %s.",
+        name, ending, elapsed, r->clock.duration_mode ? "run duration" : "daily target", target,
+        r->clock.fallback ? " (local fallback)" : "", fresh ? "today recorded" : seconds >= 0 ? "last confirmed total" : "recorded total", total,
+        coding, browsing, r->timer.breaks, r->idles_taken, idled, r->files_done, r->restarts, session_end_look_name(r->plan.end));
 }
 
 int work_session_run(Playback *p, WorkSession *s) {
     Run *r = calloc(1, sizeof(*r));
-    LoggyToday today;
+    LoggyToday today = {0}, refreshed;
+    SessionConfig plan_config;
     char text[32], target[32];
-    int ok = 0, hard = 0;
+    ULONGLONG started_ms = GetTickCount64(), started_paused_ms = p->paused_ms;
+    int ok = 0, hard = 0, state_known = 0, day_known = 0;
     unsigned i;
     if (!r) { playback_log(p, "out of memory"); return 0; }
     r->p = p; r->s = s;
@@ -655,69 +810,118 @@ int work_session_run(Playback *p, WorkSession *s) {
     r->breaks.minutes[0] = s->config->break_minutes[0]; r->breaks.minutes[1] = s->config->break_minutes[1];
     side_apps_timer_init(&r->timer, &r->breaks, s->profile, s->seed, p);
 
-    /* 0. Prepare: today's total so far, from Loggy3. */
+    /* 0. Read the recorder when possible. Its failure never prevents work from starting. */
     if (!loggy_window(NULL)) {
         playback_log(p, "Loggy3 is not open; opening it from the Start menu");
         if (start_menu_open(p, &r->rng, L"Loggy3") != 1 || !playback_wait(p, 8000)) {
-            playback_log(p, "SESSION ALERT: Loggy3 could not be opened; no recording, nothing done"); goto done;
+            if (stopped_by_user(p) || !recover(p)) { hard = 1; goto done; }
         }
     }
-    if (!read_today(r, &today)) { playback_log(p, "SESSION ALERT: Loggy3's recording state could not be read; nothing done"); goto done; }
-    if (!today.found) {
+    if (loggy_window(NULL) && read_today(r, &today)) state_known = 1;
+    else if (stopped_by_user(p) || !recover(p)) { hard = 1; goto done; }
+    if (state_known && !today.found) {
         playback_log(p, "today's row is not on Loggy3's screen; opening its Sessions page");
-        if (!loggy_open_sessions(p, &r->rng) || !read_today(r, &today)) goto done;
-        if (!today.found) playback_log(p, "SESSION ALERT: today's total could not be read from Loggy3; counting from 0");
+        if (loggy_open_sessions(p, &r->rng) && read_today(r, &refreshed)) today = refreshed;
+        else if (stopped_by_user(p) || !recover(p)) { hard = 1; goto done; }
     }
-    r->t0 = today.found ? (long)today.day.seconds : 0;
-    r->recording = today.state == LOGGY_RECORDING;
+    day_known = state_known && today.found;
+    r->t0 = day_known ? (long)today.day.seconds : 0;
+    r->recording = state_known && today.state == LOGGY_RECORDING;
     r->last_timer = r->recording && today.timer_seconds > 0 ? today.timer_seconds : 0;
-    session_plan(s->config, s->seed, (unsigned)recorded(r), s->profile->randomness_score, &r->plan);
+    plan_config = *s->config;
+    if (s->duration_minutes) plan_config.target_minutes[0] = plan_config.target_minutes[1] = s->duration_minutes;
+    session_plan(&plan_config, s->seed, s->duration_minutes ? 0 : day_known ? (unsigned)recorded(r) : 0,
+        s->profile->randomness_score, &r->plan);
+    session_clock_start(&r->clock, r->plan.target_seconds, s->duration_minutes != 0, started_ms, started_paused_ms);
+    if (day_known) session_clock_observe(&r->clock, recorded(r), GetTickCount64(), p->paused_ms);
+    if (!state_known) {
+        note_fallback(r, "could not be opened or read");
+        r->next_loggy_retry_ms = GetTickCount64() + s->config->restart_wait_seconds * 1000ULL;
+    }
     hms(recorded(r), text, sizeof(text)); hms((long)r->plan.target_seconds, target, sizeof(target));
-    playback_log(p, "SESSION TARGET: %s today (so far %s%s)", target, text, r->recording ? ", already recording" : "");
+    if (s->duration_minutes) playback_log(p, "SESSION TARGET: %s duration (Loggy3 does not control the deadline)", target);
+    else playback_log(p, "SESSION TARGET: %s today (so far %s%s%s)", target,
+        day_known ? text : "unknown", r->recording ? ", already recording" : "",
+        r->clock.fallback ? ", local fallback active" : "");
+    if (r->clock.fallback) {
+        ULONGLONG remaining = session_clock_remaining_ms(&r->clock, recorded(r), GetTickCount64(), p->paused_ms);
+        hms((long)((remaining + 999) / 1000), text, sizeof(text));
+        playback_log(p, "SESSION CLOCK: local fallback, about %s remaining%s", text,
+            r->clock.has_recorded ? " from the last confirmed total" : " (today's total unknown)");
+    }
     watching = r;
     p->watch = watch; p->watch_ms = s->config->check_seconds * 1000; p->next_watch = 0;
     p->safe_point = safe_point;
-    if (recorded(r) + (long)s->config->ending_reserve_seconds >= (long)r->plan.target_seconds) {
+    if (!r->clock.duration_mode && !r->clock.fallback &&
+        session_clock_near(&r->clock, recorded(r), ending_reserve(r), GetTickCount64(), p->paused_ms)) {
         playback_log(p, "today's target is already reached; nothing to do");
         summary(r, "already done today"); ok = 1; goto done;
     }
 
-    /* 1. Start: the start look, then Loggy3 Start (unless it is already recording). */
+    /* 1. Start the scene, then try Loggy3 if it is known to be stopped. */
     if (!r->recording) {
         if (!start_look(r) && !recover(p)) { hard = 1; goto done; }
-        if (winding_down(p)) { summary(r, "stopped before recording started"); ok = 1; goto done; }
-        task(r, "starting the Loggy3 recording", 0);
-        if (!loggy(r, LOGGY_RECORD, r->plan.minimize_loggy)) {
-            if (stopped_by_user(p)) { hard = 1; goto done; }
-            playback_log(p, "SESSION ALERT: Loggy3 did not start recording; nothing done"); goto done;
-        }
-        r->recording = 1; r->last_timer = 0;
-        /* The day's row may only now be on screen (the Start step opens the Sessions page). */
-        if (!today.found && read_today(r, &today) && today.found) r->t0 = (long)today.day.seconds;
-        r->work_start = recorded(r);
-        if (r->plan.start == START_APP && r->plan.close_start_app) {
-            OpenApps apps;
-            open_apps(&apps);
-            for (i = 0; i < apps.count; ++i)
-                if (!apps.items[i].vscode && strcmp(apps.items[i].name, "Chrome")) {
-                    if (!close_app(r, &apps.items[i], (SessionCloseMethod)session_pick(s->config->close_methods, CLOSE_METHOD_COUNT, &r->rng)) &&
-                        !recover(p)) { hard = 1; goto stop; }
-                    break;
-                }
-        }
-    } else {
-        playback_log(p, "Loggy3 is already recording; continuing the day");
-        r->work_start = recorded(r);
+        if (winding_down(p)) goto stop;
     }
+    if (!r->recording && !r->loggy_unavailable) {
+        int started, confirmed_after_failure = 0;
+        task(r, "starting the Loggy3 recording", 0);
+        started = loggy(r, LOGGY_RECORD, r->plan.minimize_loggy);
+        if (!started) confirmed_after_failure = started = loggy_recording_confirmed(r);
+        if (!started) {
+            if (stopped_by_user(p)) { hard = 1; goto done; }
+            if (!recover(p)) { hard = 1; goto done; }
+            note_fallback(r, "did not confirm Start");
+            r->next_loggy_retry_ms = GetTickCount64() + s->config->restart_wait_seconds * 1000ULL;
+        } else {
+            r->recording = 1;
+            if (confirmed_after_failure && !recover(p)) { hard = 1; goto done; }
+            if (!day_known) {
+                int read_ok = read_today(r, &refreshed);
+                if (!read_ok && (stopped_by_user(p) || !recover(p))) { hard = 1; goto done; }
+                if (read_ok && refreshed.found) {
+                    r->t0 = (long)refreshed.day.seconds;
+                    day_known = 1;
+                    if (!r->clock.fallback) {
+                        session_clock_observe(&r->clock, recorded(r), GetTickCount64(), p->paused_ms);
+                        if (!s->duration_minutes)
+                            session_plan(&plan_config, s->seed, (unsigned)recorded(r), s->profile->randomness_score, &r->plan);
+                    }
+                }
+            }
+        }
+    } else if (r->recording) {
+        playback_log(p, "Loggy3 is already recording; continuing the day");
+    }
+    if (!day_known && !s->duration_minutes && !r->clock.fallback) {
+        session_clock_fallback(&r->clock);
+        playback_log(p, "SESSION ALERT: Loggy3's daily total is unavailable; using the full selected target as a local countdown");
+        playback_log(p, "SESSION CLOCK: local fallback, today's prior recorded time is unknown");
+    }
+    if (r->plan.start == START_APP && r->plan.close_start_app) {
+        OpenApps apps;
+        open_apps(&apps);
+        for (i = 0; i < apps.count; ++i)
+            if (!apps.items[i].vscode && strcmp(apps.items[i].name, "Chrome")) {
+                if (!close_app(r, &apps.items[i], (SessionCloseMethod)session_pick(s->config->close_methods, CLOSE_METHOD_COUNT, &r->rng)) &&
+                    !recover(p)) { hard = 1; goto stop; }
+                break;
+            }
+    }
+    r->work_start_elapsed_ms = session_clock_elapsed_ms(&r->clock, GetTickCount64(), p->paused_ms);
+    r->work_started = 1;
+    check_target(r);
 
-    /* 2. Work: coding and browsing in turn, with other-app breaks inside, until the target or /stop. */
+    /* 2. Work: Loggy3 never determines whether the session can continue. */
     for (i = 0; !winding_down(p) && !r->target_reached; ++i) {
         SessionSlot slot = r->plan.slots[i % r->plan.slot_count];
         ULONGLONG started = GetTickCount64();
         int result;
         if (r->loggy_lost) {
             p->deadline = 0; InterlockedExchange(&p->yield, 0);
-            if (!restart_loggy(r)) { if (stopped_by_user(p)) { hard = 1; goto done; } goto stop; }
+            if (!retry_loggy(r)) { hard = 1; goto done; }
+            check_target(r);
+            if (r->target_reached) break;
         }
         r->slot = i + 1;
         if (!window_fix_target(p) && !recover(p)) { hard = 1; goto done; }
@@ -745,11 +949,23 @@ int work_session_run(Playback *p, WorkSession *s) {
     }
 
 stop:
-    /* 3. End: the end look, then Loggy3 Stop and what happens to its window. */
+    /* 3. End: honor a local deadline, then stop a confirmed recording. */
     p->deadline = 0; InterlockedExchange(&p->yield, 0);
     if (winding_down(p)) playback_log(p, "Telegram /stop: ending the day now");
     watching = NULL; p->watch = NULL; p->safe_point = NULL;
     if (!end_look(r) && !recover(p)) { hard = 1; goto done; }
+    if (r->target_reached && !winding_down(p) && (r->clock.duration_mode || r->clock.fallback)) {
+        while (!winding_down(p)) {
+            ULONGLONG remaining = session_clock_remaining_ms(&r->clock, recorded(r), GetTickCount64(), p->paused_ms);
+            if (!remaining) break;
+            if (!playback_wait(p, (DWORD)(remaining > 1000 ? 1000 : remaining))) { hard = 1; goto done; }
+        }
+    }
+    if (!r->recording && loggy_window(NULL)) {
+        LoggySnapshot snapshot;
+        if (loggy_snapshot(loggy_window(NULL), &snapshot) && loggy_recording_state(&snapshot, NULL) == LOGGY_RECORDING)
+            r->recording = 1;
+    }
     if (r->recording) {
         task(r, "stopping the Loggy3 recording", 0);
         /* One more try after recovering focus: never leave the recording running by accident.
@@ -762,12 +978,14 @@ stop:
             if (r->plan.after == AFTER_MINIMIZE) loggy(r, LOGGY_MINIMIZE, 0);
             else if (r->plan.after == AFTER_CLOSE) loggy(r, LOGGY_CLOSE, 0);
         }
+    } else if (r->loggy_unavailable) {
+        playback_log(p, "SESSION ALERT: Loggy3's final state is unconfirmed; check it manually if recording may still be active");
     }
     summary(r, winding_down(p) ? "stopped from Telegram" : r->target_reached ? "done" : "ended early");
     ok = 1;
 done:
     if (hard) playback_log(p, "SESSION ALERT: stopped with F9/F12 or the desktop became unavailable; Loggy3 was left %s",
-        r->recording ? "RECORDING" : "as it was");
+        r->recording ? "RECORDING" : r->loggy_unavailable ? "unconfirmed" : "as it was");
     watching = NULL; p->watch = NULL; p->safe_point = NULL; p->deadline = 0; p->soft_stop = 0;
     if (r->history_loaded) project_history_free(&r->history);
     free(r);

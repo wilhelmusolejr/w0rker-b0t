@@ -9,10 +9,10 @@ they do not imply that the capability is absent from every existing prototype.
 Unclear or conflicting details are collected under **Unconfirmed reference notes**.
 Source IDs below refer to the linked photos at the end of this file.
 
-The active project is a personal, single-session learning environment for scripted
-desktop demonstrations and accessibility-based UI interaction testing: reference
-typing, application navigation, window layout, and result verification. The
-implementation target remains C, with Python used to test concepts first.
+The active project is a personal, single-session accessibility automation and AI
+helper learning environment: reference typing, application navigation, window
+layout, browser exploration, and result verification. The implemented player is
+scripted and profile driven in C; Python experiments test targeting concepts.
 
 ## Existing starting point
 
@@ -29,10 +29,11 @@ implementation target remains C, with Python used to test concepts first.
 
 The active implementation runs `tutorial.exe` in one interactive Windows session.
 The optional `monitor.exe` reports status, alerts, and screenshots for that session
-and accepts commands from its configured Telegram chat. Earlier reference notes
-proposed a multi-instance manager; that proposal was removed from the active scope
-on 2026-10-31. Its source sketches remain linked below and its prior plan remains
-in Git history.
+and accepts commands from its configured Telegram chat. The combined session uses
+an entered `--duration-minutes` as its stop clock; otherwise it follows the
+Loggy3 daily target and switches to a local remaining-time countdown if the
+recorder fails. Accessibility, foreground guards, and saved-output checks remain
+part of the current workflow.
 
 ## Scenario profiles and shared playback settings
 
@@ -64,9 +65,9 @@ Sources: O2, O3, N1, N2, N3.
 
 Sources: N1, N3.
 
-The proposed sequence is: recording starts, an initial main or side task runs,
-tasks alternate, the main task resumes, and the session stops. Exact startup and
-shutdown ordering is configurable and needs the decisions listed below.
+The implemented sequence attempts optional recording, starts an initial main or
+side task, alternates coding and browsing, and ends at the selected time limit.
+Remaining proposals below cover broader scheduling and activity choices.
 
 - [ ] Define main-task, side-task, and idle/pause budgets, including how elapsed
   time is counted and how an activity yields or resumes.
