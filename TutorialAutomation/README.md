@@ -2,6 +2,12 @@
 
 A native C11/Win32 player for scripted teaching demonstrations and desktop UI interaction tests. Scripts drive an active, unlocked Windows desktop using `SendInput` and cursor APIs. All script syntax and external text files are checked before playback. Configurable timing ranges and seeds control presentation pacing and scrolling; application and network timing can still vary.
 
+This is a personal learning project for accessibility-based UI targeting and
+AI-assisted interaction experiments. The active workflows use one interactive
+Windows session at a time. The optional Telegram monitor controls that session;
+the long-duration Loggy3 session described below is an opt-in integration
+experiment and still needs live acceptance testing.
+
 See the [project overview](../README.md) for the component map and the distinction between the native player, Python experiments, and proposed integration work.
 
 **More docs:** [CLASS_DEMO.md](CLASS_DEMO.md) (short classroom run) · [TELEGRAM.md](TELEGRAM.md) (remote pause/resume/screenshot/start) · [CHANGELOG.md](CHANGELOG.md) (recent changes)
@@ -36,7 +42,7 @@ Idle settings are shared by profiles. [profiles/session.json](profiles/session.j
 { "name": "kruzpayr", "url": "https://github.com/wilhelmusolejr/kruzpayr", "commit": "9c6fd8253ae1609627a788a3e62616657195a024" }
 ```
 
-To add a project, add a line; get its current commit with `git ls-remote <url> HEAD`. When a bot reaches a project, it is cloned in the background into `programming_files/<name>` at that commit (`git` must be installed; nothing is typed for this step). `tutorial.exe --fetch-projects` clones the whole list ahead of time. `programming_files/` is not tracked in this repository. Each profile works through the list in its own fixed order (derived from its `local_id`), so bots do not type the same projects in step. A project with more than `max_project_characters` to type is skipped and recorded as `skipped` in the history, so it is never downloaded or checked again for that profile. Generated folders and files (`dist`, `build`, `coverage`, `.next`, `*.min.js`, `*.map`, and the `ignore` list) are left out of the reference. A project in progress keeps the commit it started with, even if the list's commit later changes.
+To add a project, add a line; get its current commit with `git ls-remote <url> HEAD`. When a profile reaches a project, it is cloned in the background into `programming_files/<name>` at that commit (`git` must be installed; nothing is typed for this step). `tutorial.exe --fetch-projects` clones the whole list ahead of time. `programming_files/` is not tracked in this repository. Each profile works through the list in its own fixed order (derived from its `local_id`), so separate profile histories can progress independently. A project with more than `max_project_characters` to type is skipped and recorded as `skipped` in the history, so it is never downloaded or checked again for that profile. Generated folders and files (`dist`, `build`, `coverage`, `.next`, `*.min.js`, `*.map`, and the `ignore` list) are left out of the reference. A project in progress keeps the commit it started with, even if the list's commit later changes.
 
 ## Side-app breaks
 
@@ -53,7 +59,7 @@ During `--code` and `--browse`, every 8-15 minutes of the main task (`check_ever
 
 When the break ends, the app is closed with Alt+F4, or minimized and left open `leave_open_percent` (20%) of the time. If a step fails (a window that does not open, a control that moved), the app is closed and the main task continues; F9, F12, Ctrl+C, and Telegram `/stop` still stop everything. Try one app on its own with `tutorial.exe --apps 1 --app notepad --minutes 2`.
 
-## Work session (a whole recorded day)
+## Optional long-duration work session
 
 `start-session.cmd [PROFILE]` from the repository root, or `tutorial --session ID`.
 Preview the day with `tutorial --dry-run-session ID [--seed N]`: it reads today's total from
@@ -119,7 +125,8 @@ confirmed within 20 s, it says so and leaves Loggy3 alone. F9/F12 stop the autom
 ongoing recording.
 
 Checked live (read only) on 2026-10-28: status and dry runs found `Start` and the idle timer
-`--:--:--` while Loggy3 was minimized. A real Start/Stop press has not been run yet (T12).
+`--:--:--` while Loggy3 was minimized. A real Start/Stop transition was checked on
+2026-10-28/29 (T12); the combined long-duration session remains unvalidated live.
 
 ## Profile mouse hand
 
@@ -129,10 +136,15 @@ moves the same way and two profiles move differently:
 
 - **Wobble:** the curve sways a few pixels sideways (a slow sway plus a faster tremor),
   fading out at both ends so it still lands exactly. Short moves barely wobble.
-- **Overshoot:** on longer aimed moves (120 px or more), roughly 15-35% of the time
+- **Overshoot:** on longer aimed moves (240 px or more), roughly 15-35% of the time
   depending on the profile, the pointer goes a little past the target (sometimes stops
   short), pauses 40-180 ms, then makes a small correcting move. Resting moves never do.
 - **Speed:** each hand is a little quicker or slower than the base speed.
+
+Moves between coding and other discovered controls now use the same curved hand path. A
+nearby control takes less time than a distant one; the configured `mouse_move_ms` range
+sets the time for a long move. Short moves go directly to the next control, while a
+longer move may include one small correction before the click.
 
 These values are not configurable yet (see TRACKER.md D4).
 
@@ -147,7 +159,7 @@ These values are not configurable yet (see TRACKER.md D4).
 | Side search | With `new_tab_search_percent` (50%) per tab visit: Ctrl+T, search, read the results, Ctrl+W back to the main browsing. |
 | Bookmark | With `bookmark_percent` per tab visit: Ctrl+D, then Enter. |
 | Random idle | `idle_percent` of actions are 8-40 s with no input at all. |
-| Random mouse movement | Curved cursor paths whose time depends on distance, varied click points inside a target, resting points away from clicked links, and drifts over the page while reading. |
+| Random mouse movement | Curved cursor paths whose time depends on distance, varied click points inside a target, resting points away from clicked links, and drifts over the page while reading. During about half of scroll passes, the pointer also drifts a few pixels around its current position; it stays still for the others. |
 | Scrolling | Passes of 2-4 bursts mixing fast scans (9-20 notches) and slow bursts (1-3 notches), reversing at the page end. |
 | Links | After 18-55 s on a page it clicks a visible same-site link, preferring pages not yet visited. Sign-in, account, settings, download, and buy/subscribe/delete-style links are skipped. Before clicking it checks through accessibility that the link itself is under the pointer. Open dialogs are dismissed with Escape. |
 
@@ -192,7 +204,7 @@ This optional version 1 configuration, [scripts/reference-coding.json](scripts/r
 
 After a **10-second countdown**, playback shows the desktop, double-clicks the project folder, types `cmd` in Explorer's address bar, and types **`code .`** in Command Prompt. It verifies the project's Plain Text settings for literal entry and configures them through Settings if needed: indentation is `none`, accepting suggestions on Enter is `off`, and automatic closing brackets, closing quotes, and surrounding selections are `never`. It reads the saved settings back before entering source. This prevents VS Code from adding closing characters to an unfinished reference prefix at a save checkpoint. It creates each file with **Ctrl+N → Save As**, typing its full destination path and original filename into the native dialog. This pins the file to the project root even when Explorer has a subfolder selected. All commands, names, paths, source text, mouse movement, and clicks retain the normal slow presentation profile. The file list runs in JSON order; set an entry's `enabled` to `false` to omit it, or reorder entries.
 
-The version 1 defaults are 140–300 ms per character, 900–2,200 ms per newline, 6–14 second pauses after 160–320 characters, 1.4–3 second action pauses, and 1–1.8 second mouse movement. With roughly 415,000 source characters, the complete reference set can span multiple days at these settings. For a shorter example, use the separate [class demo](CLASS_DEMO.md) or [split-window prototype](../experiments/split-coding-browser/README.md).
+The version 1 defaults are 140–300 ms per character, 900–2,200 ms per newline, 6–14 second pauses after 160–320 characters, 1.4–3 second action pauses, and 1–1.8 second mouse movement for longer trips (nearby controls take less time). With roughly 415,000 source characters, the complete reference set can span multiple days at these settings. For a shorter example, use the separate [class demo](CLASS_DEMO.md) or [split-window prototype](../experiments/split-coding-browser/README.md).
 
 Before entering editor setup commands, playback waits for the expected VS Code command field, its exact current value, and keyboard focus within the same command widget. It also checks the language and line-ending pickers, then confirms the Plain Text and LF status buttons. An unavailable or unexpected command field stops setup before further text is sent.
 
@@ -321,7 +333,7 @@ From the parent `worken` directory, run:
 .\start-browser-scrolling.cmd
 ```
 
-During the **10-second countdown**, focus the application you want to return to and close any Windows Run dialog. Scripts containing `BROWSER_SCROLL` also default to this countdown when run directly without `--countdown`. The sample opens a separate Chrome window (or Edge if Chrome is unavailable), visits the Python data structures tutorial, and scrolls for **20 seconds**. Cursor movement and mouse-wheel events go through the same guarded input controller as the other actions. Scroll bursts move down 2-4 notches, with occasional 1-2 notch upward movements, separated by 1.6-3.8 second reading pauses. A seed selects a repeatable sequence. The visit ends by switching back to the previous application. The browser window remains open.
+During the **10-second countdown**, focus the application you want to return to and close any Windows Run dialog. Scripts containing `BROWSER_SCROLL` also default to this countdown when run directly without `--countdown`. The sample opens a separate Chrome window (or Edge if Chrome is unavailable), visits the Python data structures tutorial, and scrolls for **20 seconds**. Cursor movement and mouse-wheel events go through the same guarded input controller as the other actions. Scroll bursts move down 2-4 notches, with occasional 1-2 notch upward movements, separated by 1.6-3.8 second reading pauses. Half the bursts have a subtle pointer drift during the wheel events; the rest keep the pointer still. A seed selects a repeatable sequence. The visit ends by switching back to the previous application. The browser window remains open.
 
 Edit `scripts/browser_scrolling.txt` to change the URL, duration, or seed:
 

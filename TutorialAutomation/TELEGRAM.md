@@ -28,7 +28,7 @@ The monitor never sends desktop input itself. It reads the playback log, takes s
 | `heartbeat_minutes` | Periodic status message; `0` = only on request (0-1440). |
 | `stall_minutes` | Alert when the playback log has not changed for this long (2-1440). |
 | `log_folder` | Where playback logs are read and `monitor.log` is written, relative to `notify.json`. |
-| `launcher` | The `.cmd` file that `/start` runs, relative to `notify.json`. It must exist. `../../start-session.cmd` runs the recorded work day; `../../start-class-demo.cmd` the class demo. |
+| `launcher` | The `.cmd` file that `/start` runs, relative to `notify.json`. It must exist. `../../start-session.cmd` runs the optional long-duration session; `../../start-class-demo.cmd` runs the class demo. |
 
 `build/` is listed in `.gitignore`, so `notify.json` and its token are never committed.
 
@@ -42,7 +42,7 @@ The monitor never sends desktop input itself. It reads the playback log, takes s
 | `/pause` | Same as F8: pauses at the next safe point (after any held key is released) |
 | `/resume` | Continues a paused playback |
 | `/stop` | Same as F9: releases input and stops; no automatic restart |
-| `/start` | Starts the `launcher` from `notify.json` (the work session: Loggy3 Start, work until today's target, Stop). `/run` still works the same. |
+| `/start` | Starts the configured `launcher` from `notify.json`. If it points to `start-session.cmd`, that session controls Loggy3 Start/Stop around the configured time target. `/run` still works the same. |
 
 Any other message returns the command list.
 
@@ -79,7 +79,7 @@ Press Win+R, type `shell:startup`, and create a shortcut to `build\monitor.exe` 
 
 Check screen capture locally without sending anything: `monitor.exe --screenshot test.jpg`. The monitor's own log is `logs\monitor.log`.
 
-## One-time setup on each bot: `setup-bot.cmd`
+## Optional one-time setup on the playback machine: `setup-bot.cmd`
 
 Run `setup-bot.cmd` from the repository root once, and accept the administrator prompt. It sets up:
 

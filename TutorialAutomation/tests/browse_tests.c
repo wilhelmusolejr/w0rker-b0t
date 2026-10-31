@@ -20,6 +20,12 @@ static void path_tests(void) {
     motion_path_at(&path, 0, &at); CHECK(at.x == a.x && at.y == a.y);
     motion_path_at(&path, 1, &at); CHECK(at.x == b.x && at.y == b.y);
     CHECK(path.duration_ms >= 100 && path.duration_ms <= 1650);
+    /* Both Bezier handles bend to the same side, so a trip between controls
+       cannot make an unintentional S turn. */
+    CHECK(((path.first[0] - a.x) * (b.y - a.y) -
+           (path.first[1] - a.y) * (b.x - a.x)) *
+          ((path.second[0] - a.x) * (b.y - a.y) -
+           (path.second[1] - a.y) * (b.x - a.x)) >= 0);
     motion_path(&rng, NULL, a, nearby, MOTION_AIM, 40, &small);
     CHECK(small.duration_ms < path.duration_ms); /* short moves are quick */
     /* Curved, but never far off the straight line. */
@@ -28,6 +34,54 @@ static void path_tests(void) {
         motion_path_at(&path, t, &at);
         cross = fabs((double)(b.x - a.x) * (at.y - a.y) - (double)(b.y - a.y) * (at.x - a.x)) / hypot(b.x - a.x, b.y - a.y);
         CHECK(cross <= 70);
+    }
+}
+static unsigned move_time(const MotionMove *move) {
+    unsigned i, total = move->pause_ms;
+    for (i = 0; i < move->count; ++i) total += move->segments[i].duration_ms;
+    return total;
+}
+static void control_move_tests(void) {
+    MotionRng rng;
+    MotionHand hand;
+    MotionMove move;
+    POINT start = {100, 100}, nearby_target = {120, 105}, middle = {250, 130}, far_target = {900, 500}, at;
+    RECT screen = {0, 0, 1920, 1080};
+    unsigned near_ms, middle_ms, far_ms, i, corrected = 0;
+    motion_hand_for(&hand, motion_hash(L"WO-0001"), 35);
+    motion_seed(&rng, 71);
+    motion_control_move(&rng, &hand, start, nearby_target, 30, &screen, 1400, &move);
+    near_ms = move_time(&move);
+    CHECK(move.count == 1 && near_ms >= 100 && near_ms < 500);
+    motion_path_at(&move.segments[0], 1, &at); CHECK(at.x == nearby_target.x && at.y == nearby_target.y);
+    motion_control_move(&rng, &hand, nearby_target, middle, 30, &screen, 1400, &move);
+    middle_ms = move_time(&move);
+    CHECK(move.count == 1 && middle_ms > near_ms && middle_ms < 1400);
+    motion_path_at(&move.segments[0], 0, &at); CHECK(at.x == nearby_target.x && at.y == nearby_target.y);
+    motion_control_move(&rng, &hand, middle, far_target, 30, &screen, 1400, &move);
+    far_ms = move_time(&move);
+    CHECK(far_ms > middle_ms && far_ms <= 1400);
+    for (i = 0; i < 300; ++i) {
+        motion_control_move(&rng, &hand, middle, far_target, 30, &screen, 1400, &move);
+        CHECK(move_time(&move) == far_ms);
+        CHECK(move.count == 1 || move.count == 2);
+        motion_path_at(&move.segments[0], 0, &at); CHECK(at.x == middle.x && at.y == middle.y);
+        motion_path_at(&move.segments[move.count - 1], 1, &at); CHECK(at.x == far_target.x && at.y == far_target.y);
+        if (move.count == 2) {
+            ++corrected;
+            CHECK(move.segments[0].duration_ms > move.segments[1].duration_ms);
+            CHECK(move.segments[1].duration_ms >= 80 && move.pause_ms <= 1400 / 5);
+        }
+    }
+    CHECK(corrected > 15);
+    {
+        MotionHand slow = hand, quick = hand;
+        unsigned slow_ms;
+        slow.speed = 0.9; quick.speed = 1.1;
+        motion_control_move(&rng, &slow, middle, far_target, 30, &screen, 1400, &move);
+        slow_ms = move_time(&move);
+        motion_control_move(&rng, &quick, middle, far_target, 30, &screen, 1400, &move);
+        CHECK(slow_ms > move_time(&move));
     }
 }
 static void hand_tests(void) {
@@ -42,7 +96,12 @@ static void hand_tests(void) {
     motion_hand_for(&one, motion_hash(L"WO-0001"), 35);
     motion_hand_for(&again, motion_hash(L"WO-0001"), 35);
     motion_hand_for(&two, motion_hash(L"WO-0002"), 55);
-    CHECK(!memcmp(&one, &again, sizeof(one)) && memcmp(&one, &two, sizeof(one)));
+    CHECK(one.overshoot_percent == again.overshoot_percent &&
+          one.overshoot_scale == again.overshoot_scale && one.wobble_px == again.wobble_px &&
+          one.speed == again.speed);
+    CHECK(one.overshoot_percent != two.overshoot_percent ||
+          one.overshoot_scale != two.overshoot_scale || one.wobble_px != two.wobble_px ||
+          one.speed != two.speed);
     CHECK(one.overshoot_percent >= 12 && one.overshoot_percent <= 36 && one.wobble_px > 0.7 && one.wobble_px < 3.3);
     CHECK(one.speed >= 0.9 && one.speed <= 1.12);
     motion_seed(&rng, 21);
@@ -82,6 +141,7 @@ static void hand_tests(void) {
         /* Resting moves and nearby targets are never corrected; a miss never leaves the bounds. */
         motion_move(&rng, &one, a, b, MOTION_REST, 160, &screen, &move); CHECK(move.count == 1);
         motion_move(&rng, &one, a, (POINT){150, 120}, MOTION_AIM, 40, &screen, &move); CHECK(move.count == 1);
+        motion_move(&rng, &one, a, (POINT){290, 100}, MOTION_AIM, 40, &screen, &move); CHECK(move.count == 1);
         motion_move(&rng, &one, a, b, MOTION_AIM, 40, &edge, &move);
         if (move.count == 2) { motion_path_at(&move.segments[0], 1, &at); CHECK(PtInRect(&edge, at)); }
         motion_move(&rng, &plain, a, b, MOTION_AIM, 40, &screen, &move);
@@ -130,6 +190,31 @@ static void scroll_tests(void) {
         for (b = 0; b < pass.count; ++b) up_at_end &= pass.bursts[b].direction == 1;
     }
     CHECK(up_at_end); /* at the page end, scroll back up */
+}
+static void scroll_nudge_tests(void) {
+    MotionRng rng, same;
+    RECT page = {100, 200, 500, 700}, edge = {0, 0, 20, 20};
+    POINT anchor = {300, 400}, current = anchor, duplicate = anchor, next, again;
+    unsigned i, moved = 0;
+    motion_seed(&rng, 99); motion_seed(&same, 99);
+    for (i = 0; i < 500; ++i) {
+        int did_move = motion_scroll_nudge(&rng, anchor, current, &page, &next);
+        int same_move = motion_scroll_nudge(&same, anchor, duplicate, &page, &again);
+        CHECK(did_move == same_move && next.x == again.x && next.y == again.y);
+        CHECK(labs(next.x - current.x) <= 2 && labs(next.y - current.y) <= 2);
+        CHECK(labs(next.x - anchor.x) <= 6 && labs(next.y - anchor.y) <= 6);
+        CHECK(PtInRect(&page, next));
+        moved += did_move;
+        current = next; duplicate = again;
+    }
+    CHECK(moved > 300);
+    anchor = (POINT){1, 1}; current = anchor;
+    for (i = 0; i < 100; ++i) {
+        motion_scroll_nudge(&rng, anchor, current, &edge, &next);
+        CHECK(PtInRect(&edge, next));
+        current = next;
+    }
+    CHECK(!motion_scroll_nudge(&rng, (POINT){30, 30}, current, &edge, &next));
 }
 static void policy_tests(void) {
     CHECK(web_same_site(L"https://docs.python.org/3/", L"https://docs.python.org/3/library/json.html"));
@@ -209,7 +294,7 @@ static void catalog_parse_tests(void) {
     CHECK(!browse_catalog_parse(bad_site, &c, error, sizeof(error)));
 }
 int main(int argc, char **argv) {
-    path_tests(); hand_tests(); point_tests(); scroll_tests(); policy_tests(); catalog_parse_tests();
+    path_tests(); control_move_tests(); hand_tests(); point_tests(); scroll_tests(); scroll_nudge_tests(); policy_tests(); catalog_parse_tests();
     if (argc > 2) {
         wchar_t profiles[MAX_PATH], browsing[MAX_PATH];
         MultiByteToWideChar(CP_ACP, 0, argv[1], -1, profiles, MAX_PATH);

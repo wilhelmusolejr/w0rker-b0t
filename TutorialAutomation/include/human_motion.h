@@ -37,6 +37,10 @@ void motion_path(MotionRng *rng, const MotionHand *hand, POINT start, POINT end,
 typedef struct { MotionPath segments[2]; unsigned count, pause_ms; } MotionMove;
 void motion_move(MotionRng *rng, const MotionHand *hand, POINT start, POINT end, int purpose, double target_width,
     const RECT *bounds, MotionMove *move);
+/* Control-to-control aiming uses the configured move time for a long trip; nearby controls
+   take proportionally less time. The complete plan, including a correction, fits that time. */
+void motion_control_move(MotionRng *rng, const MotionHand *hand, POINT start, POINT end,
+    double target_width, const RECT *bounds, unsigned reference_ms, MotionMove *move);
 void motion_path_at(const MotionPath *path, double fraction, POINT *point);
 /* A resting point in the content interior, different on each call. */
 int motion_rest_point(MotionRng *rng, const RECT *region, POINT *point);
@@ -57,4 +61,7 @@ void motion_scroll_init(MotionScroll *scroll, MotionRng *rng);
 /* scroll_percent is the page's vertical position (0-100) or -1 when unknown. */
 void motion_scroll_plan(MotionScroll *scroll, int scroll_percent, unsigned stalls, MotionScrollPass *pass);
 unsigned motion_burst_notches(const MotionBurst *burst);
+/* A small random walk around the pointer's position at the start of a scroll sequence.
+   Each step is at most 2 px per axis and stays within 6 px of the anchor and bounds. */
+int motion_scroll_nudge(MotionRng *rng, POINT anchor, POINT current, const RECT *bounds, POINT *next);
 #endif

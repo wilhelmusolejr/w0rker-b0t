@@ -3,6 +3,10 @@
 Small, shippable tasks broken out from [task.md](task.md). Each one should fit in
 one sitting and end with something you can run, test, or dry-run.
 
+Active scope: one interactive Windows session for personal learning and
+accessibility-based UI testing. The earlier multi-instance manager proposal was
+retired on 2026-10-31; its source sketches and Git history remain available.
+
 **How to use:** change a task's status in place, add a short note when you finish
 or get stuck, and link the commit. Phases run roughly in order; later phases plug
 into the C pieces built in Phase 1.
@@ -35,7 +39,7 @@ desktop input, so you can test them entirely with `--dry-run-config`.
 | [ ] | T5 | Move shared pacing (pause ranges, mouse-move time, cursor paths) into one `pace` section used by every activity. | S | O2 | |
 | [ ] | T6 | Focus guard: check the foreground window before each input batch. On mismatch, Alt+Tab back, verify, then resume or stop. | M | O2, N2 | |
 | [ ] | T7 | Interruptibility audit: confirm F8/F9/F12 work during typing, idle waits, app switches, and recovery waits. Fix any gaps. | S | N3 | |
-| [ ] | T8 | Write a bot status file (current activity, state, last error) every few seconds. This is groundwork for the manager. | S | O1 | |
+| [ ] | T8 | Write a local session status file (current activity, state, last error) every few seconds for troubleshooting and the optional monitor. | S | O1 | |
 
 ## Phase 2: Recording lifecycle (Loggy3)
 
@@ -48,9 +52,10 @@ desktop input, so you can test them entirely with `--dry-run-config`.
 | [ ] | T13 | Session start sequence: optionally open a chosen app, start recording, optionally close that app, then begin tasks. | M | N1, N3 | Planned: see "Session plan", step 1. Built as T62. |
 | [ ] | T14 | Session end sequence: save outputs, close all / one / no apps, stop recording, in the configured order. | M | N1, N3 | Planned: see "Session plan", step 4. Built as T63. |
 
-### Session plan (agreed 2026-10-28, not built yet)
+### Optional long-duration session plan (agreed 2026-10-28, partially built)
 
-One launcher runs a whole recorded day: `start-session.cmd [PROFILE]`, then `switch-to-console.cmd` as now.
+`start-session.cmd [PROFILE]` runs the local session experiment with Loggy3. See
+T57–T65 for implemented pieces and the remaining live acceptance work.
 
 **Decisions**
 - Main task: coding. Alternative task: browsing (for now).
@@ -212,29 +217,11 @@ Run with `start-browsing.cmd [PROFILE_ID] [MINUTES]`; preview with `tutorial.exe
 | [ ] | T47 | Choose whether to start with the main or side task, and the initial visible state (desktop, folder, CMD, app). `needs D6` | S | N3 | |
 | [ ] | T48 | Apply computer name per the decision (metadata or a real Windows setting). `needs D10` | S | N3 | |
 
-## Phase 8: Manager and bots
-
-Two roles (see task.md, "Roles: manager and bots"):
-- **Bot:** a machine or RDP session that runs the automation: `tutorial.exe`, Loggy3, and one profile. There are about 20.
-- **Manager:** one separate place that keeps the list of bots. It asks any bot for a screenshot or its status, sends start, pause, resume and stop, and receives the bots' reports and alerts.
-
-Today only the bot side exists: each bot's Telegram monitor reports on its own.
+## Phase 8: Perception and recovery experiments
 
 | Status | ID | Task | Size | Source | Notes |
 |---|---|---|---|---|---|
-| [ ] | T49 | Short design note: the manager and bot roles, how bots reach the manager, and how they authenticate. `needs D14, D15` | S | O1 | |
-| [ ] | T66 | Bot list in the manager: name, machine or RDP session, profile, last seen, online or offline. | S | | |
-| [ ] | T67 | Bot agent: the bot side of the link. Reuses the monitor's readers: Loggy3 state and timer, today's hours, current task, screenshot. | M | | Builds on `monitor.exe` (T65). |
-| [ ] | T51 | Bots report status, current activity, errors, and alerts to the manager on a schedule and on change. | M | O1 | Builds on T8/T65. |
-| [ ] | T68 | The manager asks one bot, or all, for a screenshot and status, and shows them side by side. | M | | |
-| [ ] | T50 | The manager starts, stops, pauses, resumes, and interrupts a bot's session (same meanings as Telegram /run, /stop, /pause, /resume). | L | O1, O2 | |
-| [ ] | T52 | Assign a profile and activity mix to each bot from the manager. | S | O1 | |
-| [ ] | T53 | Error policy: which errors allow recovery, which stop the bot, and what is reported to the manager. `needs D3` | M | O2 | |
-
-## Phase 9: Perception experiments
-
-| Status | ID | Task | Size | Source | Notes |
-|---|---|---|---|---|---|
+| [ ] | T53 | Local error policy: which errors allow recovery, which stop playback, and what is written to the session log or optional monitor. `needs D3` | M | O2 | |
 | [ ] | T54 | Audit accessibility coverage for every action above. List targets it can't find, including when windows open small or moved. | M | O2 | |
 | [ ] | T55 | "Python eye" experiment: try visual targeting only for the gaps from T54, then decide whether a model is needed and where it runs. | L | O2 | |
 
@@ -247,8 +234,6 @@ matching `needs` note from its tasks.
 
 | Status | ID | Question | Source | Blocks |
 |---|---|---|---|---|
-| [~] | D1 | RDP 1 = "record", RDP 2 and 3 = "bot"? Confirm each session's role. | O1 | T49 |
-|  |  | **Partly answered (2026-10-29):** the roles are manager and bot. Still to confirm whether "record" in the drawing means the manager. | | |
 | [ ] | D2 | Does the desktop grid mean icon layout, activity groups, or both? ("Start 5", "Key points", x-y grid, "random file…") | O2 | T39 |
 | [ ] | D3 | What should the cursor do while an error is being handled? | O2 | T53 |
 | [ ] | D4 | Randomness score: formula, inputs, and effect on playback. Currently it only raises the mouse hand's overshoot rate and wobble (`motion_hand_for`). | O3, N1 | T45 |
@@ -262,6 +247,4 @@ matching `needs` note from its tasks.
 | [ ] | D10 | "Computer name": config metadata or an actual Windows rename? | N3 | T48 |
 | [ ] | D11 | "Pin random items": pin where (taskbar, Start, Quick Access) and which item types? | N2 | T42 |
 | [ ] | D12 | Does "dribble" mean Dribbble? | O1 | T16 |
-| [ ] | D14 | Where does the manager run: a separate machine, one of the RDP sessions, or a web or Telegram group? | Owner | T49 |
-| [ ] | D15 | How do bots and the manager talk: through Telegram (one bot token per bot, or one group), a small server the bots call, or a shared folder? | Owner | T49, T51 |
 | [ ] | D13 | Formula writing is crossed out. Do formulas belong in the integrated Excel activity? | O1 | T33 |

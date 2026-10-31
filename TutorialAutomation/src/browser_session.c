@@ -166,9 +166,9 @@ static int snapshot(Session *x) {
 static int scroll(Session *x) {
     RECT *doc = &x->page->document;
     LONG width = doc->right - doc->left, height = doc->bottom - doc->top;
-    POINT at;
+    POINT at, drift_anchor;
     MotionScrollPass pass;
-    int old_percent = x->page->scroll_percent, in_content, reposition;
+    int old_percent = x->page->scroll_percent, in_content, reposition, drift;
     uint32_t old_signature = x->page->signature;
     unsigned b, s;
     if (!GetCursorPos(&at)) return 0;
@@ -180,13 +180,18 @@ static int scroll(Session *x) {
         if (!move_to(x, at, MOTION_REST, 160)) return 0;
     }
     motion_scroll_plan(&x->scroll, x->page->scroll_percent, x->stalls, &pass);
+    drift = motion_chance(&x->rng, 50);
+    if (drift && !GetCursorPos(&drift_anchor)) return 0;
     ++x->scrolls;
     for (b = 0; b < pass.count && session_left(x); ++b) {
         const MotionBurst *burst = &pass.bursts[b];
-        playback_log(x->p, "scroll %s %s: %u notches", burst->fast ? "fast" : "slow",
-            burst->direction < 0 ? "down" : "up", motion_burst_notches(burst));
+        playback_log(x->p, "scroll %s %s: %u notches%s", burst->fast ? "fast" : "slow",
+            burst->direction < 0 ? "down" : "up", motion_burst_notches(burst),
+            drift ? " with small pointer drift" : "");
         for (s = 0; s < burst->step_count; ++s)
-            if (!mouse_wheel(x->p, burst->steps[s].notches) || !hold(x, burst->steps[s].delay_ms)) return 0;
+            if (!mouse_wheel(x->p, burst->steps[s].notches) ||
+                (drift && !mouse_scroll_nudge(x->p, &x->rng, drift_anchor, doc)) ||
+                !hold(x, burst->steps[s].delay_ms)) return 0;
         if (!hold(x, burst->pause_after_ms)) return 0;
     }
     if (motion_chance(&x->rng, 25) && !relax(x, "after-scroll", 100)) return 0;

@@ -136,7 +136,8 @@ int mouse_follow(Playback *p, const MotionPath *path) {
         if (!playback_wait(p, 8 + (DWORD)(elapsed % 7))) return 0;
     }
 }
-int mouse_move_human(Playback *p, MotionRng *rng, POINT target, int purpose, double width) {
+static int mouse_move_planned(Playback *p, MotionRng *rng, POINT target, int purpose,
+    double width, unsigned reference_ms, int paced) {
     POINT start;
     MotionMove move;
     MONITORINFO info;
@@ -149,10 +150,17 @@ int mouse_move_human(Playback *p, MotionRng *rng, POINT target, int purpose, dou
     if (GetMonitorInfoW(MonitorFromPoint(target, MONITOR_DEFAULTTONULL), &info)) {
         InflateRect(&info.rcMonitor, -2, -2); bounds = &info.rcMonitor;
     }
-    motion_move(rng, &p->hand, start, target, purpose, width, bounds, &move);
+    if (paced) motion_control_move(rng, &p->hand, start, target, width, bounds, reference_ms, &move);
+    else motion_move(rng, &p->hand, start, target, purpose, width, bounds, &move);
     for (i = 0; i < move.count; ++i)
         if ((i && !playback_wait(p, move.pause_ms)) || !mouse_follow(p, &move.segments[i])) return 0;
     return 1;
+}
+int mouse_move_human(Playback *p, MotionRng *rng, POINT target, int purpose, double width) {
+    return mouse_move_planned(p, rng, target, purpose, width, 0, 0);
+}
+int mouse_move_control(Playback *p, MotionRng *rng, POINT target, double width, unsigned reference_ms) {
+    return mouse_move_planned(p, rng, target, MOTION_AIM, width, reference_ms, 1);
 }
 int mouse_wheel(Playback *p, int notches) {
     INPUT input = {0};
@@ -160,4 +168,20 @@ int mouse_wheel(Playback *p, int notches) {
     input.type = INPUT_MOUSE; input.mi.dwFlags = MOUSEEVENTF_WHEEL;
     input.mi.mouseData = (DWORD)(notches * WHEEL_DELTA);
     return playback_send(p, &input, 1);
+}
+int mouse_scroll_nudge(Playback *p, MotionRng *rng, POINT anchor, const RECT *bounds) {
+    POINT current, next;
+    HWND hit;
+    if (!playback_poll(p) || !playback_guard(p)) return 0;
+    if (!GetCursorPos(&current)) {
+        playback_log(p, "GetCursorPos failed while scrolling (error %lu)", GetLastError()); return 0;
+    }
+    if (!motion_scroll_nudge(rng, anchor, current, bounds, &next) || !window_point_visible(next)) return 1;
+    hit = WindowFromPoint(next);
+    if (!hit || GetAncestor(hit, GA_ROOT) != p->target) return 1;
+    playback_note_cursor(next.x, next.y);
+    if (!SetCursorPos(next.x, next.y)) {
+        playback_log(p, "SetCursorPos failed while scrolling (error %lu)", GetLastError()); return 0;
+    }
+    return 1;
 }

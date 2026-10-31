@@ -193,8 +193,11 @@ static DWORD time_left(const Playback *p, ULONGLONG start, ULONGLONG paused, DWO
 
 static int scroll_page(Playback *p, DWORD duration, uint32_t seed) {
     BrowserScrollPlan plan;
+    MotionRng drift_rng;
     ULONGLONG started, paused;
-    RECT client;
+    RECT client, scroll_area;
+    POINT origin = {0, 0};
+    int drift_available;
     if (!GetClientRect(p->target, &client) || client.right < 400 || client.bottom < 300) {
         playback_log(p, "browser client area is too small for scrolling"); return 0;
     }
@@ -207,16 +210,29 @@ static int scroll_page(Playback *p, DWORD duration, uint32_t seed) {
             !mouse_move_arc(p, point.x, point.y, action_move_next(&p->action_pace),
                 action_curve_next(&p->action_pace))) return 0;
     } else if (!mouse_move(p, client.right * 2 / 3, client.bottom * 2 / 3, 600, 0)) return 0;
+    drift_available = ClientToScreen(p->target, &origin);
+    if (drift_available) {
+        scroll_area.left = origin.x + client.right / 5;
+        scroll_area.top = origin.y + client.bottom * 17 / 100;
+        scroll_area.right = origin.x + client.right * 86 / 100;
+        scroll_area.bottom = origin.y + client.bottom * 85 / 100;
+    }
     browser_scroll_plan_init(&plan, seed);
+    motion_seed(&drift_rng, seed ^ UINT32_C(0x8b2e7d43));
     started = GetTickCount64(); paused = p->paused_ms;
     while (time_left(p, started, paused, duration)) {
         BrowserScrollStep step = browser_scroll_plan_next(&plan);
         unsigned notches = (unsigned)(step.notches < 0 ? -step.notches : step.notches), i;
         DWORD remaining;
-        playback_log(p, "browser scroll %s %u notch(es), then reading pause",
-            step.notches < 0 ? "down" : "up", notches);
+        int drift = drift_available && motion_chance(&drift_rng, 50);
+        POINT drift_anchor;
+        if (drift && !GetCursorPos(&drift_anchor)) return 0;
+        playback_log(p, "browser scroll %s %u notch(es)%s, then reading pause",
+            step.notches < 0 ? "down" : "up", notches,
+            drift ? " with small pointer drift" : "");
         for (i = 0; i < notches && time_left(p, started, paused, duration); ++i) {
-            if (!playback_poll(p) || !mouse_scroll(p, step.notches < 0 ? -1 : 1)) return 0;
+            if (!playback_poll(p) || !mouse_scroll(p, step.notches < 0 ? -1 : 1) ||
+                (drift && !mouse_scroll_nudge(p, &drift_rng, drift_anchor, &scroll_area))) return 0;
             remaining = time_left(p, started, paused, duration);
             if (!playback_wait(p, remaining > 120 ? 120 : remaining)) return 0;
         }
@@ -279,8 +295,21 @@ static int open_search_result(Playback *p, uint32_t seed, wchar_t opened[220]) {
         if (count) break;
         /* Results may have scrolled past; wheel back toward the top of the page and look again. */
         { unsigned notch;
+          MotionRng drift_rng;
+          RECT area;
+          POINT origin = {0, 0}, anchor;
+          int drift;
+          motion_seed(&drift_rng, seed ^ UINT32_C(0x53f6a91b) ^ (attempt * UINT32_C(0x9e3779b9)));
+          drift = motion_chance(&drift_rng, 50);
+          if (drift) {
+              if (!GetClientRect(p->target, &area) || !ClientToScreen(p->target, &origin) ||
+                  !GetCursorPos(&anchor)) drift = 0;
+              else OffsetRect(&area, origin.x, origin.y);
+          }
           playback_log(p, "no result in view; scrolling back up");
-          for (notch = 0; notch < 12; ++notch) if (!mouse_scroll(p, 1) || !playback_wait(p, 90)) return 0;
+          for (notch = 0; notch < 12; ++notch)
+              if (!mouse_scroll(p, 1) || (drift && !mouse_scroll_nudge(p, &drift_rng, anchor, &area)) ||
+                  !playback_wait(p, 90)) return 0;
           if (!playback_wait(p, 1200)) return 0; }
     }
     if (!count) { playback_log(p, "no organic search result was visible; reading the results page instead"); return 2; }

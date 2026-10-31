@@ -1,5 +1,6 @@
 #include "human_motion.h"
 #include <math.h>
+#include <stdlib.h>
 
 void motion_seed(MotionRng *r, uint32_t seed) { r->state = seed ? seed : UINT32_C(0x9e3779b9); }
 static uint32_t next(MotionRng *r) {
@@ -38,7 +39,10 @@ void motion_path(MotionRng *r, const MotionHand *hand, POINT start, POINT end, i
     double nx = distance ? -dy / distance : 0, ny = distance ? dx / distance : 0;
     double bend = distance * 0.10 < 65 ? distance * 0.10 : 65;
     double f1 = motion_uniform(r, 0.18, 0.35), f2 = motion_uniform(r, 0.65, 0.86);
-    double b1 = motion_uniform(r, -bend, bend), b2 = motion_uniform(r, -bend, bend);
+    /* Keep both control points on the same side of the route. Independent signs made
+       consecutive clicks sometimes weave in an S shape before reaching the target. */
+    double side = motion_uniform(r, -bend, bend);
+    double b1 = side * motion_uniform(r, 0.65, 1.0), b2 = side * motion_uniform(r, 0.65, 1.0);
     double speed = purpose == MOTION_AIM ? motion_uniform(r, 1100, 2400) : motion_uniform(r, 800, 1600);
     if (hand && hand->speed > 0) speed *= hand->speed;
     /* Fitts-style precision term: small, distant targets take a little longer. */
@@ -65,7 +69,7 @@ void motion_move(MotionRng *r, const MotionHand *h, POINT start, POINT end, int 
     const RECT *bounds, MotionMove *m) {
     double dx = end.x - start.x, dy = end.y - start.y, distance = sqrt(dx * dx + dy * dy);
     m->count = 1; m->pause_ms = 0;
-    if (h && h->overshoot_percent && purpose == MOTION_AIM && distance >= 120 && motion_chance(r, h->overshoot_percent)) {
+    if (h && h->overshoot_percent && purpose == MOTION_AIM && distance >= 240 && motion_chance(r, h->overshoot_percent)) {
         double miss = distance * motion_uniform(r, 0.03, 0.08) * (h->overshoot_scale > 0 ? h->overshoot_scale : 1);
         double side = motion_uniform(r, -0.35, 0.35), along;
         POINT missed;
@@ -84,6 +88,34 @@ void motion_move(MotionRng *r, const MotionHand *h, POINT start, POINT end, int 
         }
     }
     motion_path(r, h, start, end, purpose, width, &m->segments[0]);
+}
+void motion_control_move(MotionRng *r, const MotionHand *h, POINT start, POINT end,
+    double width, const RECT *bounds, unsigned reference_ms, MotionMove *m) {
+    double distance = hypot((double)end.x - start.x, (double)end.y - start.y);
+    double fraction = sqrt(distance / 650.0);
+    unsigned wanted, travel;
+    MotionHand direct;
+    if (h && h->speed > 0) fraction /= h->speed;
+    if (fraction < 0.25) fraction = 0.25;
+    if (fraction > 1.0) fraction = 1.0;
+    wanted = (unsigned)lround(reference_ms * fraction);
+    if (wanted < 100) wanted = 100;
+    /* A short hop should not turn into a miss, a pause, and a sudden correction. */
+    if (h && wanted < 400) {
+        direct = *h; direct.overshoot_percent = 0; h = &direct;
+    }
+    motion_move(r, h, start, end, MOTION_AIM, width, bounds, m);
+    if (m->count == 1) { m->segments[0].duration_ms = wanted; return; }
+    if (m->pause_ms > wanted / 5) m->pause_ms = wanted / 5;
+    travel = wanted - m->pause_ms;
+    {
+        unsigned first = m->segments[0].duration_ms, second = m->segments[1].duration_ms;
+        unsigned correction = (unsigned)lround((double)travel * second / (first + second));
+        if (correction < 80) correction = 80;
+        if (correction > travel / 3) correction = travel / 3;
+        m->segments[0].duration_ms = travel - correction;
+        m->segments[1].duration_ms = correction;
+    }
 }
 void motion_path_at(const MotionPath *p, double t, POINT *point) {
     double up, down, u, v;
@@ -124,6 +156,26 @@ int motion_click_point(MotionRng *r, const RECT *region, POINT *point) {
 }
 
 void motion_scroll_init(MotionScroll *s, MotionRng *rng) { s->rng = rng; s->last_fast = motion_chance(rng, 65); }
+int motion_scroll_nudge(MotionRng *r, POINT anchor, POINT current, const RECT *bounds, POINT *point) {
+    LONG left, right, top, bottom;
+    LONG dx, dy;
+    if (!bounds || !point || !PtInRect(bounds, anchor) ||
+        labs(current.x - anchor.x) > 6 || labs(current.y - anchor.y) > 6) return 0;
+    left = anchor.x - 6 > bounds->left ? anchor.x - 6 : bounds->left;
+    right = anchor.x + 6 < bounds->right - 1 ? anchor.x + 6 : bounds->right - 1;
+    top = anchor.y - 6 > bounds->top ? anchor.y - 6 : bounds->top;
+    bottom = anchor.y + 6 < bounds->bottom - 1 ? anchor.y + 6 : bounds->bottom - 1;
+    dx = (LONG)motion_between(r, 0, 4) - 2;
+    dy = (LONG)motion_between(r, 0, 4) - 2;
+    if (!dx && !dy) dx = motion_chance(r, 50) ? 1 : -1;
+    point->x = current.x + dx;
+    point->y = current.y + dy;
+    if (point->x < left) point->x = left;
+    if (point->x > right) point->x = right;
+    if (point->y < top) point->y = top;
+    if (point->y > bottom) point->y = bottom;
+    return point->x != current.x || point->y != current.y;
+}
 unsigned motion_burst_notches(const MotionBurst *b) {
     unsigned i, total = 0;
     for (i = 0; i < b->step_count; ++i) total += (unsigned)(b->steps[i].notches < 0 ? -b->steps[i].notches : b->steps[i].notches);

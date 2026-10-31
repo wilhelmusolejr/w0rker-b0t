@@ -8,14 +8,20 @@ int presentation_rest(Playback *p, const char *step) {
 }
 int presentation_hover(Playback *p, const RECT *rect) {
     POINT point;
+    MotionRng rng;
+    unsigned duration;
     int coords = p->client_coords, ok = 0;
     if (!action_point_next(&p->action_pace, rect, &point)) {
         playback_log(p, "click target is too small"); return 0;
     }
     p->client_coords = 0;
     playback_log(p, "moving to control at %ld,%ld", point.x, point.y);
-    if (!mouse_move_arc(p, point.x, point.y, action_move_next(&p->action_pace),
-        action_curve_next(&p->action_pace)) || !playback_wait(p,
+    duration = action_move_next(&p->action_pace);
+    motion_seed(&rng, p->action_pace.enabled ?
+        action_pace_pick(&p->action_pace, 1, UINT32_C(0x7fffffff)) : action_recording_seed());
+    if (!mouse_move_control(p, &rng, point,
+        rect->right - rect->left < rect->bottom - rect->top ?
+        rect->right - rect->left : rect->bottom - rect->top, duration) || !playback_wait(p,
         p->action_pace.enabled ? action_pace_pick(&p->action_pace, 120, 350) : 0)) goto done;
     ok = 1;
 done:

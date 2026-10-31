@@ -1,9 +1,9 @@
-# Windows desktop automation
+# Windows desktop accessibility automation
 
-This project builds scripted Windows desktop demonstrations and tests application
-interaction through visible typing, mouse movement, scrolling, and window
-switching. It includes reference-code playback in VS Code, browser navigation,
-Excel examples, and accessibility-based application controls.
+This personal learning project tests accessibility-based Windows desktop interaction
+and AI-assisted automation concepts through visible typing, mouse movement,
+scrolling, and window switching. It includes reference-code playback in VS Code,
+browser navigation, Excel examples, and application controls.
 
 The main player is written in C11 using Win32 APIs. Standalone Python experiments
 test interaction concepts before integration into the C player. Timing ranges
@@ -11,18 +11,18 @@ and random seeds configure playback pacing and navigation choices. Source-code
 playback enters existing reference text through the editor and verifies saved
 contents; it does not generate new code.
 
-## Roles: manager and bots
+## Active scope
 
-| Role | What it is |
-|---|---|
-| **Bot** | A machine or RDP session where the automation runs (`tutorial.exe`, Loggy3, one profile); about 20 of them. It runs the work session and reports status, alerts, and screenshots. |
-| **Manager** | One separate place that keeps the list of bots, asks each for a screenshot or status, and sends start, pause, resume, and stop. Not built yet: today each bot reports on its own through its Telegram monitor. |
+The active workflows run in one interactive Windows desktop session at a time.
+`tutorial.exe` performs the local demonstration. The optional `monitor.exe` reports
+that session's status and accepts commands from its configured Telegram chat.
+Earlier multi-instance manager sketches were retired from the active work plan;
+the source photos and Git history preserve that exploration. See the current
+[work plan](task.md) and [tracker](TRACKER.md).
 
-See [task.md](task.md) ("Roles: manager and bots") and Phase 8 in [TRACKER.md](TRACKER.md).
-
-**Setting up a bot:** build `TutorialAutomation`, put the Telegram token in `build\notify.json`, and run
+**Setting up optional remote control:** build `TutorialAutomation`, put the Telegram token in `build\notify.json`, and run
 `setup-bot.cmd` once (administrator prompt). Then Telegram `/start` moves the session to the console if
-needed and runs the recorded work day (`start-session.cmd`); `/stop` ends it. See
+needed and runs the configured launcher (for example `start-session.cmd`); `/stop` ends it. See
 [TELEGRAM.md](TutorialAutomation/TELEGRAM.md).
 
 ## Components and documentation
