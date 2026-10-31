@@ -3,6 +3,10 @@
 Small, shippable tasks broken out from [task.md](task.md). Each one should fit in
 one sitting and end with something you can run, test, or dry-run.
 
+The [root README](README.md) proposes an ordered JSON action flow for the next
+rewrite. This tracker documents the current player and earlier profile-driven
+backlog; its scheduler tasks have not yet been recast for the new plan format.
+
 Active scope: one interactive Windows session for personal learning in
 accessibility automation and an AI helper. The current player follows configured
 actions; live desktop behavior and broader AI-assisted decisions remain separate
@@ -42,28 +46,28 @@ desktop input, so you can test them entirely with `--dry-run-config`.
 | [ ] | T7 | Interruptibility audit: confirm F8/F9/F12 work during typing, idle waits, app switches, and recovery waits. Fix any gaps. | S | N3 | |
 | [ ] | T8 | Write a local session status file (current activity, state, last error) every few seconds for troubleshooting and the optional monitor. | S | O1 | |
 
-## Phase 2: Recording lifecycle (Loggy3)
+## Phase 2: Recording lifecycle (L3)
 
 | Status | ID | Task | Size | Source | Notes |
 |---|---|---|---|---|---|
-| [~] | T9 | Port Loggy3 show / maximize / minimize / close from the Python prototype to C. | M | O1, N1 | `src/loggy3.c`, `start-loggy3.cmd` show, minimize, close, demo. Taskbar icon, then title-bar buttons by accessible name, with the profile's mouse hand. Close refuses while recording. Not live-tested. |
+| [~] | T9 | Port L3 show / maximize / minimize / close from the Python prototype to C. | M | O1, N1 | `src/loggy3.c`, `start-loggy3.cmd` show, minimize, close, demo. Taskbar icon, then title-bar buttons by accessible name, with the profile's mouse hand. Close refuses while recording. Not live-tested. |
 | [x] | T10 | Port recording-state inspection (accessibility) to C, with a status-only CLI flag. | M | N1 | `tutorial --loggy3 status`: no input, works while minimized. Read Start and `--:--:--` live on 2026-10-28. |
 | [~] | T11 | Add Start/Stop recording actions in C, with dry-run and hover-only modes. | M | N1, N3 | `--loggy3 record` and `stop` use a checked button click once. Both real Start and Stop transitions were confirmed in 2026-10-28/29; the combined session is not live-tested. |
 | [x] | T12 | Live test one real Start → Stop transition and record the result here. | S | | 2026-10-28/29: the script clicked Stop (confirmed within 1 s) and Start (confirmed within 3 s, timer running). |
-| [~] | T13 | Session start sequence: prepare a chosen app, attempt recording, then begin tasks. | M | N1, N3 | Implemented through T62; the session now continues when Loggy3 cannot start. Live acceptance remains. |
+| [~] | T13 | Session start sequence: prepare a chosen app, attempt recording, then begin tasks. | M | N1, N3 | Implemented through T62; the session now continues when L3 cannot start. Live acceptance remains. |
 | [~] | T14 | Session end sequence: save outputs, close selected apps, and stop a confirmed recording. | M | N1, N3 | Implemented through T63; recorder state may require manual checking if unavailable. Live acceptance remains. |
 
 ### Combined accessibility session (implemented, live acceptance pending)
 
 `start-session.cmd 1 --duration-minutes 20` selects a 20-minute local session
-budget from launch. Loggy3 recording is attempted, but its total cannot stop
+budget from launch. L3 recording is attempted, but its total cannot stop
 this run. Preparation, work, planned idles, app breaks, and ending share the
 budget; explicit pauses are excluded. A safe save or slow UI step can finish
 slightly after the deadline.
 
-Without a duration override, `profiles/session.json` selects a daily Loggy3
+Without a duration override, `profiles/session.json` selects a daily L3
 target between 10h15m and 10h45m. Time already recorded in its UTC day counts.
-If Loggy3 cannot be opened, read, or started, the session keeps working. It
+If L3 cannot be opened, read, or started, the session keeps working. It
 switches once to a local countdown for the remaining amount from the last
 confirmed total. If no total was readable, it uses the full selected target
 and reports that assumption. Later recorder recovery does not move the deadline.
@@ -72,7 +76,7 @@ with `--duration-minutes N`.
 
 | Phase | Current behavior |
 |---|---|
-| Prepare | Read Loggy3 when available; keep the desktop guards and choose one timing mode. |
+| Prepare | Read L3 when available; keep the desktop guards and choose one timing mode. |
 | Work | Alternate coding and browsing; side-app breaks and session idles count toward the selected limit. |
 | Recorder failure | Alert, switch the default clock to local fallback, and retry recording at most twice at safe points. Work continues. |
 | End | Finish a safe coding line, run the selected end look, wait to a local deadline if ending finishes early, and stop a confirmed recording. |
@@ -82,20 +86,20 @@ The current session is scripted and profile driven. Windows accessibility
 provides control names, states, and rectangles; foreground and desktop checks
 guard each input. Logs and saved-output verification show what actually ran.
 See [the session guide](TutorialAutomation/README.md#combined-work-session).
-The combined session, especially Loggy3 failure and recovery, has not yet been
+The combined session, especially L3 failure and recovery, has not yet been
 validated in a live desktop run.
 
 | Status | ID | Task | Size | Source | Notes |
 |---|---|---|---|---|---|
-| [x] | T57 | Read today's recorded total from Loggy3's Sessions page (UTC day row) plus the running timer. Read-only; check live whether the day row already includes the running session. | S | | `loggy_today` / `loggy_today_seconds` in `src/loggy3.c`; `--loggy3 status` prints it. Checked live 2026-10-29: the day row counts finished sessions only (stayed 48s while recording 1m18s), so today = row + running timer. Row only shown on the Sessions page, current period; totals are per Loggy3 account (all computers). |
-| [x] | T58 | Session settings and input-free dry-run timeline. | M | | `profiles/session.json` sets the daily target and slot lengths. `tutorial --dry-run-session ID --duration-minutes 20` prints a duration plan without reading Loggy3 or requiring downloaded projects; the default preview reads today's total when available. |
+| [x] | T57 | Read today's recorded total from L3's Sessions page (UTC day row) plus the running timer. Read-only; check live whether the day row already includes the running session. | S | | `loggy_today` / `loggy_today_seconds` in `src/loggy3.c`; `--loggy3 status` prints it. Checked live 2026-10-29: the day row counts finished sessions only (stayed 48s while recording 1m18s), so today = row + running timer. Row only shown on the Sessions page, current period; totals are per L3 account (all computers). |
+| [x] | T58 | Session settings and input-free dry-run timeline. | M | | `profiles/session.json` sets the daily target and slot lengths. `tutorial --dry-run-session ID --duration-minutes 20` prints a duration plan without reading L3 or requiring downloaded projects; the default preview reads today's total when available. |
 | [~] | T59 | Time-limited slots: coding and browsing take a budget and stop at a safe point (line finished, file saved). | M | | Coding stops at a safe point (finishes the line, saves, `ended_early`) and reuses an open VS Code window; browsing and side-app breaks end on `playback_yield`. Not live-tested. |
-| [~] | T60 | Combined session loop and two timing modes. | M | | `src/work_session.c` alternates coding and browsing. `--duration-minutes N` uses a local clock; the default uses the daily Loggy3 target and switches to a local remaining-time countdown after recorder failure. Session idles use active local time. Input-free clock tests pass; live acceptance remains. |
-| [~] | T61 | Watcher and recorder-failure recovery. | M | | Every 15 s the watcher checks the selected deadline and Loggy3 read-only. Missing, stopped, or unknown recording triggers a local fallback and at most two spaced retries. Work continues; Telegram `/stop` winds down. Live acceptance remains. |
-| [~] | T62 | Start looks (empty desktop, VS Code, browser, random app) and the Loggy3 Start sequence. | M | | Replaces T13. Start looks and Loggy3 Start (opens the Sessions page if needed). Not live-tested. |
-| [~] | T63 | End looks (direct, close all, close 1–2), app closing by X / Alt+F4 / taskbar menu, Loggy3 after-stop. | M | | Replaces T14. End looks; apps closed by X / Alt+F4 / taskbar menu "Close window"; save prompts answered (VS Code: Save). Not live-tested. |
+| [~] | T60 | Combined session loop and two timing modes. | M | | `src/work_session.c` alternates coding and browsing. `--duration-minutes N` uses a local clock; the default uses the daily L3 target and switches to a local remaining-time countdown after recorder failure. Session idles use active local time. Input-free clock tests pass; live acceptance remains. |
+| [~] | T61 | Watcher and recorder-failure recovery. | M | | Every 15 s the watcher checks the selected deadline and L3 read-only. Missing, stopped, or unknown recording triggers a local fallback and at most two spaced retries. Work continues; Telegram `/stop` winds down. Live acceptance remains. |
+| [~] | T62 | Start looks (empty desktop, VS Code, browser, random app) and the L3 Start sequence. | M | | Replaces T13. Start looks and L3 Start (opens the Sessions page if needed). Not live-tested. |
+| [~] | T63 | End looks (direct, close all, close 1–2), app closing by X / Alt+F4 / taskbar menu, L3 after-stop. | M | | Replaces T14. End looks; apps closed by X / Alt+F4 / taskbar menu "Close window"; save prompts answered (VS Code: Save). Not live-tested. |
 | [~] | T64 | Session summary, alerts, and short live acceptance run. | M | | `SESSION SUMMARY`, `SESSION ALERT`, and `SESSION CLOCK` lines feed the optional monitor. A 20-minute `--duration-minutes 20` run is the intended short acceptance check; live validation is pending. |
-| [x] | T65 | Telegram `/screenshot` and `/status` include recorder state, selected session clock mode, and current task. | S | | The monitor reads Loggy3 through accessibility and follows `SESSION TARGET`, `SESSION CLOCK`, and `SESSION TASK` log lines. `monitor --status` is input-free. |
+| [x] | T65 | Telegram `/screenshot` and `/status` include recorder state, selected session clock mode, and current task. | S | | The monitor reads L3 through accessibility and follows `SESSION TARGET`, `SESSION CLOCK`, and `SESSION TASK` log lines. `monitor --status` is input-free. |
 
 ## Phase 3: Browser
 
@@ -106,7 +110,7 @@ Run with `start-browsing.cmd [PROFILE_ID] [MINUTES]`; preview with `tutorial.exe
 | [~] | T15 | Browser window open / close / minimize as separate actions, distinct from tab actions. | S | O1, N3 | Opening from the taskbar icon works (`browser_open_window`). Close and minimize actions not done yet. |
 | [x] | T16 | Site catalog file with categories (programming/docs, GitHub, lifestyle, social). Start with about 30 sites. `needs D12` for "dribble" | S | O1 | `profiles/browsing.json`: Superseded by T17. Reddit removed on request, so no social media. "dribble" left out until D12. |
 | [x] | T17 | Grow the site catalog to 100 sites. | S | N3 | 100 sites: 50 programming (31 docs, 6 GitHub, 13 blogs) and 50 others (food, home/plants, beauty/yoga, photography, travel, books, movies/K-dramas, games, tech/general news, science). All load without a login wall or automated-access challenge, checked 2026-10-28. |
-| [x] | T18 | Search topics driven by profile interests (questions, quotes, songs, apps, Loggy3). | S | O3, N1 | Question, phrase, song lyrics, apps, and Loggy3 templates filled from profile interests. |
+| [x] | T18 | Search topics driven by profile interests (questions, quotes, songs, apps, L3). | S | O3, N1 | Question, phrase, song lyrics, apps, and L3 templates filled from profile interests. |
 | [x] | T19 | Per visit, choose direct URL entry or Google search then open a result (extend the existing research visit). | S | N1 | `direct_site_percent` (50%) per tab. |
 | [~] | T20 | Multi-tab visit: random 1–5 tabs with a search in each. Define return and close rules. `needs D7, D8` | M | N1 | 1-5 tabs filled and revisited. Closing rule is provisional until D8. Not live-tested. |
 | [~] | T21 | Optional new-tab search during another visit, then return to the original tab. `needs D7` | S | N1 | 50% per tab visit (my reading of D7). Not live-tested. |

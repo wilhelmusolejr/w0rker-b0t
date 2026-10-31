@@ -9,6 +9,10 @@ they do not imply that the capability is absent from every existing prototype.
 Unclear or conflicting details are collected under **Unconfirmed reference notes**.
 Source IDs below refer to the linked photos at the end of this file.
 
+The [root README](README.md) now describes a proposed ordered JSON action flow.
+This backlog records the earlier profile-driven plan and current implementation;
+its scheduling tasks need review before work on the new flow begins.
+
 The active project is a personal, single-session accessibility automation and AI
 helper learning environment: reference typing, application navigation, window
 layout, browser exploration, and result verification. The implemented player is
@@ -22,7 +26,7 @@ scripted and profile driven in C; Python experiments test targeting concepts.
 | Taskbar targeting | [Python prototype](experiments/taskbar-pointer-demo/README.md) locates app buttons and shows the desktop. | Reuse targeting concepts in the integrated workflow. |
 | Browser exploration | [Python prototype](experiments/browser-explorer/README.md) discovers accessible controls, observes click outcomes, and varies movement, scrolling, and pauses. | Add the planned tab, bookmark, and scenario-selection behavior. |
 | Split-window demo | [Separate sample](experiments/split-coding-browser/README.md) opens the desktop project in VS Code, types for one minute, browses for one minute, and returns to the editor. | Generalize its timing and layout for scheduled main/side tasks. |
-| Loggy3 controls | [Prototype](experiments/loggy3-window/README.md) supports window control and state-aware recording commands. Window actions, status, dry-run, and hover-only behavior were tested live. | C integration exists; a real Start/Stop transition was checked on 2026-10-28/29. The combined work session still needs a live acceptance run. |
+| L3 controls | [Prototype](experiments/loggy3-window/README.md) supports window control and state-aware recording commands. Window actions, status, dry-run, and hover-only behavior were tested live. | C integration exists; a real Start/Stop transition was checked on 2026-10-28/29. The combined work session still needs a live acceptance run. |
 | Excel playback | [Separate demo](TutorialAutomation/EXCEL_DEMO.md) supports fictional workbooks, formulas, and result checks. | Review what to reuse in the combined workflow; formula integration is unresolved. |
 
 ## Current session scope
@@ -31,7 +35,7 @@ The active implementation runs `tutorial.exe` in one interactive Windows session
 The optional `monitor.exe` reports status, alerts, and screenshots for that session
 and accepts commands from its configured Telegram chat. The combined session uses
 an entered `--duration-minutes` as its stop clock; otherwise it follows the
-Loggy3 daily target and switches to a local remaining-time countdown if the
+L3 daily target and switches to a local remaining-time countdown if the
 recorder fails. Accessibility, foreground guards, and saved-output checks remain
 part of the current workflow.
 
@@ -87,11 +91,11 @@ Remaining proposals below cover broader scheduling and activity choices.
 
 ## Application actions
 
-### Loggy3 (L3)
+### L3
 
-Sources: O1, N1, N3. The newer notes explicitly name Loggy3.
+Sources: O1, N1, N3. The newer notes refer to the recorder.
 
-- [ ] Integrate opening/showing, maximizing, minimizing, and closing Loggy3.
+- [ ] Integrate opening/showing, maximizing, minimizing, and closing L3.
 - [ ] Integrate recording-state inspection and the existing Start/Stop commands
   into the session lifecycle, then validate real recording transitions.
 
@@ -106,7 +110,7 @@ Sources: O1, O3, N1, N3.
 - [ ] Include programming/documentation, GitHub, lifestyle, and social-media
   categories. Preserve the older "dribble" entry for clarification.
 - [ ] Configure search topics such as questions, phrases/quotes, song-related
-  queries, applications, and Loggy3, using the selected profile's interests.
+  queries, applications, and L3, using the selected profile's interests.
 - [ ] Support both direct website entry and Google search followed by a result.
 - [ ] Add an optional search in a new tab during another browsing activity,
   then return to the original browsing context.

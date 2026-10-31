@@ -1,4 +1,4 @@
-# Loggy3 show / minimize prototype
+# L3 show / minimize prototype
 
 This application-control experiment tests taskbar targeting, window state, and
 accessibility-based recording controls. Window-only, state-inspection, and actual
@@ -10,13 +10,13 @@ the neighboring `taskbar-pointer-demo` input helper and `browser-explorer/motion
 
 Double-click one of these launchers:
 
-- **start-loggy3-demo.cmd**: click Loggy3's taskbar button, show/maximize its window,
+- **start-loggy3-demo.cmd**: click L3's taskbar button, show/maximize its window,
   wait five seconds, then minimize it.
-- **show-loggy3.cmd**: show/maximize Loggy3 and leave it visible.
-- **minimize-loggy3.cmd**: minimize Loggy3 and leave it running.
+- **show-loggy3.cmd**: show/maximize L3 and leave it visible.
+- **minimize-loggy3.cmd**: minimize L3 and leave it running.
 
 There is a three-second countdown. Esc, F9, F12, or Ctrl+C stop the script.
-Keep the Windows/RDP desktop connected and unlocked. Keep Loggy3's button visible
+Keep the Windows/RDP desktop connected and unlocked. Keep L3's button visible
 on the primary taskbar; pin it there if you want the script to launch a closed app.
 
 From the workspace root:
@@ -29,7 +29,7 @@ python experiments/loggy3-window/loggy3_window.py demo --hold 10
 python experiments/loggy3-window/loggy3_window.py --inspect
 ```
 
-The taskbar button is found by its current accessible name, `Loggy3`. The script
+The taskbar button is found by its current accessible name. The script
 reads its rectangle and rechecks it before a real mouse click. It identifies the
 main app window by its title and process (`loggy3-gui.exe` or `loggy3.exe`), then
 maximizes it through Windows. If necessary, it first moves the app onto the monitor
@@ -45,7 +45,7 @@ Multiple matching main windows, a blocking app dialog, or a window that does not
 support maximization produce an explicit error. The primary taskbar is supported;
 managing separate Windows virtual desktops is outside this prototype's scope.
 
-Validated live on 2026-10-26: clicked the running Loggy3 taskbar button, confirmed
+Validated live on 2026-10-26: clicked the running L3 taskbar button, confirmed
 the main window was maximized and active on the current monitor, waited three
 seconds, then confirmed it was minimized and still running. The internal
 `com.loggy3.recorder-siw` window is excluded from main-window selection.
@@ -57,14 +57,14 @@ Windows API references: [ShowWindow states](https://learn.microsoft.com/en-us/wi
 
 ## Recording status, Start, and Stop
 
-Loggy3 exposes its WebView UI through Windows UI Automation. The visible recording
+L3 exposes its WebView UI through Windows UI Automation. The visible recording
 button has the `btn-record` class, is inside `bottom-bar`, and supports Invoke.
 The read-only inspection on 2026-10-26 found an enabled **Start** button and the
 idle timer **--:--:--**. Session-history rows are excluded from current-state checks.
 
 Additional launchers:
 
-- **status-loggy3.cmd**: show Loggy3 and read its recording state.
+- **status-loggy3.cmd**: show L3 and read its recording state.
 - **start-loggy3-recording.cmd**: start only if the current UI state is stopped.
 - **stop-loggy3-recording.cmd**: stop only if the current UI state is recording.
 
@@ -88,10 +88,10 @@ It sends one action and waits for the new UI-reported state. It does not retry
 the toggle if confirmation times out. Unknown, disabled, or ambiguous controls
 produce a report/error without a recording action.
 
-`record` starts a real Loggy3 recording session, following the app's configured
+`record` starts a real L3 recording session, following the app's configured
 storage/upload behavior. `--dry-run` only reports the planned action. Esc/F9/F12
-stop the automation; they do not automatically stop an ongoing Loggy3 recording.
-Use the Stop command or Loggy3 itself for that.
+stop the automation; they do not automatically stop an ongoing L3 recording.
+Use the Stop command or L3 itself for that.
 
 Live validation covered status detection, the Start dry run, and cursor-only
 preview. The eight automated

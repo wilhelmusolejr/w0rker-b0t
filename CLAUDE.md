@@ -11,9 +11,13 @@ current work plan, and [TRACKER.md](TRACKER.md) for task status. Native code is
 under `TutorialAutomation/src` and `include`; settings are in `profiles`, with
 input-free checks under `tests`. Small experiments are under `experiments`.
 
+The root README proposes a new ordered JSON action flow. The existing task and
+tracker files describe the current player and earlier profile-driven backlog;
+do not treat their scheduler tasks as the final design for the rewrite.
+
 The optional Telegram monitor controls the configured playback session. A
 combined session with `--duration-minutes N` uses local active time and continues
-if Loggy3 is unavailable. Without that option, the daily Loggy3 target is
+if L3 is unavailable. Without that option, the daily L3 target is
 10h15m–10h45m by default; an unreadable recorder switches the remaining budget
 to a local countdown. Keep the live-validation limits stated in the feature
 guides accurate when changing documentation.

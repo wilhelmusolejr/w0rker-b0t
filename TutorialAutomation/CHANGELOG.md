@@ -4,9 +4,9 @@
 
 ### Combined session timing
 
-- Added `--duration-minutes N` for a local session budget independent of Loggy3's daily total. Preparation, work, breaks, idles, and ending count; explicit pauses do not. A short run can be previewed with `--dry-run-session 1 --duration-minutes 20`.
-- The default still targets 10h15m–10h45m of daily Loggy3 time. If the recorder cannot open, be read, start, or stay recording, the session switches to a local countdown for the last known remaining amount. If today's total was never readable, it uses the full selected target and logs that assumption. Work continues after recording failure.
-- Recorder recovery is limited to two spaced attempts. The monitor now identifies the session clock separately from Loggy3's state. Added input-free clock tests; combined live session validation is pending.
+- Added `--duration-minutes N` for a local session budget independent of L3's daily total. Preparation, work, breaks, idles, and ending count; explicit pauses do not. A short run can be previewed with `--dry-run-session 1 --duration-minutes 20`.
+- The default still targets 10h15m–10h45m of daily L3 time. If the recorder cannot open, be read, start, or stay recording, the session switches to a local countdown for the last known remaining amount. If today's total was never readable, it uses the full selected target and logs that assumption. Work continues after recording failure.
+- Recorder recovery is limited to two spaced attempts. The monitor now identifies the session clock separately from L3's state. Added input-free clock tests; combined live session validation is pending.
 - Updated the project guides and optional monitor setup names to describe a single-session accessibility automation and AI helper learning project.
 
 ## 2026-10-16

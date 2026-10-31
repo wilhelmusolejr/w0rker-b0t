@@ -13,7 +13,7 @@ A live profile 1 session with `--duration-minutes 20 --coding-minutes 6
 04:09:58 local time. The session reported exactly 20 minutes elapsed, coding and
 browsing slots, one other-app break, one completed file, and a saved partial file
 for resume. Slot times include breaks and idles. The selected direct-stop ending
-left application windows open. Loggy3 was unavailable and its final recording
+left application windows open. L3 was unavailable and its final recording
 state remained unconfirmed; failure recovery during confirmed recording was not
 validated by this run.
 
@@ -21,7 +21,7 @@ validated by this run.
 
 The native build completed with no compiler warnings. Input-free `session_tests`,
 `dry_run_session`, and `dry_run_session_duration` passed. The new clock checks cover
-a 20-minute duration independent of a larger Loggy3 total, explicit pauses,
+a 20-minute duration independent of a larger L3 total, explicit pauses,
 the default daily-total target, fallback from a last confirmed total, and a full
 default fallback when no total was readable. The duration dry run printed an
 end-to-end plan without sending desktop input.
@@ -30,7 +30,7 @@ The full CTest run passed 29 of 35 checks. Six unrelated checks require local
 fixtures that are absent or differ in this checkout: `project_tests` expects the
 `kruzpayr` reference folder; four reference-job checks expect an existing
 destination directory; `excel_simulation_files` found rebuilt workbook hashes
-different from its recorded manifest. The combined session and Loggy3 failure
+different from its recorded manifest. The combined session and L3 failure
 path have **not** been run live on a desktop yet.
 
 ## Recorded results — 2026-10-15

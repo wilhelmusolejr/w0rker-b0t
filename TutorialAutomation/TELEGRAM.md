@@ -42,7 +42,7 @@ The monitor never sends desktop input itself. It reads the playback log, takes s
 | `/pause` | Same as F8: pauses at the next safe point (after any held key is released) |
 | `/resume` | Continues a paused playback |
 | `/stop` | Same as F9: releases input and stops; no automatic restart |
-| `/start` | Starts the configured `launcher` from `notify.json`. If it points to `start-session.cmd`, that session uses either `--duration-minutes N` or the daily Loggy3 target and continues if the recorder fails. `/run` still works the same. |
+| `/start` | Starts the configured `launcher` from `notify.json`. If it points to `start-session.cmd`, that session uses either `--duration-minutes N` or the daily L3 target and continues if the recorder fails. `/run` still works the same. |
 
 Any other message returns the command list.
 

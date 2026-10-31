@@ -5,7 +5,7 @@ A native C11/Win32 player for scripted teaching demonstrations and desktop UI in
 This is a personal learning project for an accessibility automation and AI helper.
 The active workflows use one interactive Windows session at a time. The optional
 Telegram monitor controls that session. The combined coding and browsing session
-uses either a local duration or a daily recording target; Loggy3 failure does not
+uses either a local duration or a daily recording target; L3 failure does not
 stop desktop work. The combined run still needs live acceptance testing.
 
 See the [project overview](../README.md) for the component map and the distinction between the native player, Python experiments, and proposed integration work.
@@ -34,7 +34,7 @@ Each profile has two independent 1–10 controls in [profiles/profiles.json](pro
 
 `mistype_level` 5 means an ordinary amount of visible corrections; it does not mean 50% of letters are wrong. The implementation maps level 1–10 to a 2–20% chance that an eligible letter is first typed as a neighbouring key and immediately corrected (level 5: 10%). This is an approximation chosen to produce roughly the [6.3% correction-key frequency observed in the study](https://userinterfaces.aalto.fi/136Mkeystrokes/resources/chi-18-analysis.pdf) for text with about 70% eligible letters. The final saved text is still checked against the reference. `mistype_level` is the only mistake setting in each profile.
 
-Idle settings are shared by profiles. [profiles/session.json](profiles/session.json) targets about 10% of a work session as one-minute idles; it considers another idle after 5–10 minutes of active work. The session planner adjusts the chance at each check to approach that time share. Loggy3 records an idle when it is available. [profiles/programming.json](profiles/programming.json) gives standalone `--code` runs a 10% chance of a one-minute idle after a coding checkpoint. The combined work session uses only its session idles.
+Idle settings are shared by profiles. [profiles/session.json](profiles/session.json) targets about 10% of a work session as one-minute idles; it considers another idle after 5–10 minutes of active work. The session planner adjusts the chance at each check to approach that time share. L3 records an idle when it is available. [profiles/programming.json](profiles/programming.json) gives standalone `--code` runs a 10% chance of a one-minute idle after a coding checkpoint. The combined work session uses only its session idles.
 
 **Project list:** [profiles/projects.json](profiles/projects.json) lists the GitHub projects, each pinned to a full 40-character commit id so the reference never changes under a half-typed file:
 
@@ -66,11 +66,11 @@ When the break ends, the app is closed with Alt+F4, or minimized and left open `
 the 10-hour daily target cannot end it early. The clock starts after the launcher countdown and
 includes preparation, coding, browsing, app breaks, idles, and ending. F8 and Telegram pauses do
 not consume the budget. The ending begins near the deadline; a save or slow UI action can finish
-slightly late. Loggy3 is attempted but is optional in this mode.
+slightly late. L3 is attempted but is optional in this mode.
 
 Without `--duration-minutes`, the session keeps its existing daily target: a random
-**10h15m–10h45m** total in Loggy3, including time recorded earlier in its UTC day. A successful
-read of today's total determines how much remains. If Loggy3 cannot open, cannot be read, or
+**10h15m–10h45m** total in L3, including time recorded earlier in its UTC day. A successful
+read of today's total determines how much remains. If L3 cannot open, cannot be read, or
 cannot confirm Start, work still runs. The local clock then counts the remaining time from the
 last confirmed total. When no total was ever readable, it uses the full selected target and
 reports that assumption. Once local fallback begins, later recorder recovery does not move the
@@ -79,7 +79,7 @@ deadline. `--target-minutes N` keeps the daily-total meaning; it cannot be combi
 
 The session alternates coding slots (40–80 min) and browsing slots (10–20 min). Other-app breaks
 (5–20 min) and one-minute idles can occur at safe points and count toward either time limit. It
-tries Loggy3 again at most twice after a failure, spaced by `restart_wait_seconds`, while work
+tries L3 again at most twice after a failure, spaced by `restart_wait_seconds`, while work
 continues. At the end it stops a confirmed recording; if the final recorder state is unknown,
 the log and optional Telegram monitor alert the user. Telegram `/stop` finishes the current line,
 saves, and runs the ending immediately. F9/F12 stop immediately and may leave recording active.
@@ -89,9 +89,9 @@ to preview the daily-target plan. Session previews work before reference project
 are downloaded and send no desktop input. A live coding task needs projects in
 `programming_files/`; run `tutorial.exe --fetch-projects` to prepare them. Settings are in
 [profiles/session.json](profiles/session.json). The monitor's `/status` shows the selected clock
-mode, Loggy3's separate state, and the current task; `monitor.exe --status` prints it locally.
+mode, L3's separate state, and the current task; `monitor.exe --status` prints it locally.
 A 20-minute live duration session completed with coding, browsing, and one app break
-while Loggy3 was unavailable. Recovery from a failure during confirmed recording
+while L3 was unavailable. Recovery from a failure during confirmed recording
 still needs a live acceptance run.
 
 Set `"pause_on_user_input": false` in `profiles/session.json` to keep a work session
@@ -105,15 +105,15 @@ as coding does: currently 250-800 ms between actions and 250-650 ms for control
 movement. Coding newline delays are 250-700 ms and periodic typing pauses are
 1.5-4 seconds. Character typing speed still follows the profile's `typing_speed`.
 
-## Loggy3 recorder
+## L3 recorder
 
 `start-loggy3.cmd [ACTION] [options]` from the repository root, or
 `tutorial --loggy3 ACTION [options]`. C port of `experiments/loggy3-window`.
 
 | Action | What it does |
 |---|---|
-| `status` (default) | Reads whether Loggy3 is recording. No input, no countdown; works while Loggy3 is minimized. |
-| `show` | Clicks Loggy3's taskbar icon (the Start menu when it has none), then its Maximize button. Skips the click when it is already in front. |
+| `status` (default) | Reads whether L3 is recording. No input, no countdown; works while L3 is minimized. |
+| `show` | Clicks L3's taskbar icon (the Start menu when it has none), then its Maximize button. Skips the click when it is already in front. |
 | `minimize` | Clicks its Minimize button. Nothing happens if it is already minimized. |
 | `close` | Shows it, then clicks its Close button (Alt+F4 when there is none). Refuses while recording. |
 | `record` / `stop` | Presses the Start / Stop button once, then waits up to 20 s for the new state. |
@@ -128,13 +128,13 @@ buttons by name, and the recording button as the one visible button whose class 
 `btn-record` (session-history rows are ignored). The label decides the state: Start / Start
 recording means stopped, Stop / Stop recording means recording; a disabled button means busy.
 For record, stop and close, half the time the pointer heads straight for the button once
-Loggy3 is in front; the other half it first rests over the window for a moment. Before pressing, the button is read again, and the element under the pointer must be that same
+L3 is in front; the other half it first rests over the window for a moment. Before pressing, the button is read again, and the element under the pointer must be that same
 button with the same label. The press is sent once and never retried: if the new state is not
-confirmed within 20 s, it says so and leaves Loggy3 alone. F9/F12 stop the automation, not an
+confirmed within 20 s, it says so and leaves L3 alone. F9/F12 stop the automation, not an
 ongoing recording.
 
 Checked live (read only) on 2026-10-28: status and dry runs found `Start` and the idle timer
-`--:--:--` while Loggy3 was minimized. A real Start/Stop transition was checked on
+`--:--:--` while L3 was minimized. A real Start/Stop transition was checked on
 2026-10-28/29 (T12); the combined long-duration session remains unvalidated live.
 
 ## Profile mouse hand
@@ -164,7 +164,7 @@ These values are not configurable yet (see TRACKER.md D4).
 | Behavior | How it works |
 |---|---|
 | Tabs | Fills 1-5 tabs (`settings.tabs`). Each tab is a direct site (`direct_site_percent`) or a Google search followed by one organic result. Both are typed after a mouse click on the address bar's text area (the first click highlights the old address; Ctrl+L is only a fallback). Then it switches between tabs (mouse on the tab, or Ctrl+Tab) until the time is up. |
-| What to open | Sites whose `topics` match the profile's interests or hobbies are 4x more likely per match; programmers also lean toward programming docs. Searches are question, phrase/quote, song lyrics, apps, or Loggy3 (`search_weights`), filled from the profile's interests. |
+| What to open | Sites whose `topics` match the profile's interests or hobbies are 4x more likely per match; programmers also lean toward programming docs. Searches are question, phrase/quote, song lyrics, apps, or L3 (`search_weights`), filled from the profile's interests. |
 | Side search | With `new_tab_search_percent` (50%) per tab visit: Ctrl+T, search, read the results, Ctrl+W back to the main browsing. |
 | Bookmark | With `bookmark_percent` per tab visit: Ctrl+D, then Enter. |
 | Random idle | `idle_percent` of actions are 8-40 s with no input at all. |
