@@ -16,6 +16,7 @@ typedef enum { AFTER_FRONT, AFTER_MINIMIZE, AFTER_CLOSE, AFTER_STOP_COUNT } Sess
 typedef enum { BROWSER_MINIMIZE, BROWSER_CLOSE, BROWSER_LEAVE, BROWSER_AFTER_COUNT } SessionBrowserAfter;
 
 typedef struct {
+    int pause_on_user_input; /* false: keep working through manual input; stop keys still apply */
     unsigned target_minutes[2], coding_minutes[2], browsing_minutes[2], break_minutes[2];
     unsigned first_coding_percent, loggy_minimize_percent, start_app_close_percent;
     unsigned ending_reserve_seconds, check_seconds, restart_wait_seconds, weight_jitter_percent;

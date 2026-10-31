@@ -1,5 +1,6 @@
 {
     "version": 1,
+    "pause_on_user_input": false,
     "target_minutes": [615, 645],
     "coding_minutes": [40, 80],
     "browsing_minutes": [10, 20],

@@ -304,6 +304,11 @@ int playback_run(Playback *p, const Script *script, DWORD countdown_ms) {
     typing_pace_configure(&p->typing_pace, 140, 300, 900, 2200,
         p->dry_run ? 1 : action_recording_seed());
     typing_pace_breaks(&p->typing_pace, 160, 320, 6000, 14000);
+    if (p->work_session && p->work_session->programming) {
+        const ProgrammingConfig *c = p->work_session->programming;
+        action_pace_configure(&p->action_pace, c->action_pause_ms[0], c->action_pause_ms[1],
+            c->mouse_move_ms[0], c->mouse_move_ms[1], p->work_session->seed);
+    }
     if (!p->dry_run) {
         if (!window_desktop_ready()) { playback_log(p, "no usable interactive desktop"); return 0; }
         if (!playback_controls_start(p)) { ok = 0; goto done; }
@@ -324,7 +329,9 @@ int playback_run(Playback *p, const Script *script, DWORD countdown_ms) {
                 remaining -= step;
             }
         }
-        p->user_quiet_ms = 20000;
+        p->user_quiet_ms = p->work_session && !p->work_session->config->pause_on_user_input ? 0 : 20000;
+        playback_log(p, "manual input: %s", p->user_quiet_ms ?
+            "pause until idle for 20 seconds" : "keep working (automatic input pause disabled)");
     }
     for (i = 0; i < script->count; ++i) {
         const Command *c = &script->commands[i];

@@ -68,12 +68,13 @@ int session_config_parse(const wchar_t *text, SessionConfig *c, char *error, siz
     static const wchar_t *const keys[] = {L"version", L"target_minutes", L"coding_minutes", L"browsing_minutes",
         L"break_minutes", L"first_task_coding_percent", L"loggy_minimize_percent", L"start_app_close_percent",
         L"ending_reserve_seconds", L"check_seconds", L"restart_wait_seconds", L"weight_jitter_percent",
-        L"idle_percent", L"idle_minutes", L"idle_check_minutes",
+        L"idle_percent", L"idle_minutes", L"idle_check_minutes", L"pause_on_user_input",
         L"start_looks", L"end_looks", L"close_methods", L"after_stop", L"browser_after"};
     JsonValue *root = NULL;
     const JsonValue *v;
     int ok = 0;
     memset(c, 0, sizeof(*c));
+    c->pause_on_user_input = 1;
     if (!cap) return 0;
     *error = 0;
     if (!json_parse(text, &root, error, cap)) return 0;
@@ -102,7 +103,15 @@ int session_config_parse(const wchar_t *text, SessionConfig *c, char *error, siz
              !weights(root, L"browser_after", browser_keys, BROWSER_AFTER_COUNT, c->browser_after))
         fail(error, cap, "session settings: start_looks, end_looks, close_methods, after_stop and browser_after are "
             "{name: weight 0-100} with known names and at least one weight above 0");
-    else ok = 1;
+    else {
+        v = json_get(root, L"pause_on_user_input");
+        if (v && v->kind != JSON_BOOL)
+            fail(error, cap, "session settings: pause_on_user_input must be true or false");
+        else {
+            if (v) c->pause_on_user_input = v->number != 0;
+            ok = 1;
+        }
+    }
     json_free(root);
     return ok;
 }
@@ -251,6 +260,8 @@ void session_print_plan(const SessionConfig *c, const SessionPlan *plan, const P
     ULONGLONG at = 60, end_at;
     WideCharToMultiByte(CP_UTF8, 0, profile->name, -1, name, sizeof(name), NULL, NULL);
     hm(recorded, a, sizeof(a)); hm(plan->target_seconds, b, sizeof(b));
+    printf("Manual input: %s; F8 pause and F9/F12 stop remain available.\n",
+        c->pause_on_user_input ? "pause until idle for 20 seconds" : "keep working");
     if (duration_mode) printf("Session for %s: run for %s from launch; Loggy3 recording is optional.\n", name, b);
     else {
         printf("Session for %s: today so far %s (Loggy3), target %s", name, a, b);

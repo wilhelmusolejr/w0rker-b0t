@@ -1,6 +1,7 @@
 #include "work_session.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 static int checks, failures;
 #define CHECK(t) do { ++checks; if (!(t)) { ++failures; fprintf(stderr,"FAIL %d: %s\n",__LINE__,#t); } } while (0)
 
@@ -57,6 +58,35 @@ static void shipped_tests(const wchar_t *path) {
     CHECK(c.break_minutes[0] == 5 && c.break_minutes[1] == 20);
     CHECK(c.idle_percent == 10 && c.idle_minutes[0] == 1 && c.idle_minutes[1] == 1);
     CHECK(c.idle_check_minutes[0] == 5 && c.idle_check_minutes[1] == 10);
+    CHECK(!c.pause_on_user_input);
+    /* Optional boolean: old settings keep pausing; malformed values are rejected. */
+    {
+        wchar_t *text = NULL, *field, *end, *variant;
+        const wchar_t *values[] = {L"true", L"false", L"0", L"\"false\"", L"null"};
+        unsigned n;
+        CHECK(read_utf8(path, &text, error, sizeof(error)));
+        if (!text) return;
+        field = wcsstr(text, L"\"pause_on_user_input\"");
+        CHECK(field != NULL);
+        if (!field) { free(text); return; }
+        end = wcschr(field, L',');
+        CHECK(end != NULL);
+        if (!end) { free(text); return; }
+        memmove(field, end + 1, (wcslen(end + 1) + 1) * sizeof(*field));
+        CHECK(session_config_parse(text, &c, error, sizeof(error)) && c.pause_on_user_input);
+        variant = calloc(wcslen(text) + 100, sizeof(*variant));
+        CHECK(variant != NULL);
+        if (!variant) { free(text); return; }
+        for (n = 0; n < sizeof(values) / sizeof(*values); ++n) {
+            swprintf(variant, wcslen(text) + 100, L"{\"pause_on_user_input\":%ls,%ls", values[n], text + 1);
+            if (n < 2) {
+                CHECK(session_config_parse(variant, &c, error, sizeof(error)));
+                CHECK(c.pause_on_user_input == (n == 0));
+            } else CHECK(!session_config_parse(variant, &c, error, sizeof(error)) && error[0]);
+        }
+        free(variant); free(text);
+        CHECK(session_config_load(path, &c, error, sizeof(error)));
+    }
     /* The same seed plans the same day; a dry run shows what a live run does. */
     session_plan(&c, 42, 0, 35, &a); session_plan(&c, 42, 0, 35, &b);
     CHECK(!memcmp(&a, &b, sizeof(a)));

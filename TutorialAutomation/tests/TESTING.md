@@ -1,5 +1,22 @@
 # Verification and desktop acceptance tests
 
+## Manual input configuration and pacing - 2026-10-31
+
+The native player and regression targets rebuilt successfully. All five selected
+CTest checks passed: `action_pace_tests`, `playback_controls_tests`, `session_tests`,
+`dry_run_session`, and `dry_run_session_duration`. They cover the optional
+`pause_on_user_input` boolean, its backward-compatible default, rejection of
+non-boolean values, and both automatic-pause modes without desktop input.
+
+A live profile 1 session with `--duration-minutes 20 --coding-minutes 6
+--browsing-minutes 3 --seed 7` and `pause_on_user_input: false` completed at
+04:09:58 local time. The session reported exactly 20 minutes elapsed, coding and
+browsing slots, one other-app break, one completed file, and a saved partial file
+for resume. Slot times include breaks and idles. The selected direct-stop ending
+left application windows open. Loggy3 was unavailable and its final recording
+state remained unconfirmed; failure recovery during confirmed recording was not
+validated by this run.
+
 ## Session clock change — 2026-10-31
 
 The native build completed with no compiler warnings. Input-free `session_tests`,

@@ -1,5 +1,6 @@
 #include "playback_controls.h"
 #include "window_manager.h"
+#include "work_session.h"
 #include <stdio.h>
 
 /* Exercise the hook callback without injecting any keyboard events. */
@@ -50,6 +51,18 @@ int main(void) {
         Command end = {0}; Script script = {&end, 1};
         end.kind = CMD_END; end.line = 1;
         CHECK(playback_run(&p, &script, 0));
+        {
+            SessionConfig config = {0};
+            WorkSession session = {0};
+            Playback running = {0};
+            session.config = &config;
+            running.work_session = &session;
+            CHECK(playback_run(&running, &script, 0));
+            CHECK(running.user_quiet_ms == 0);
+            config.pause_on_user_input = 1;
+            CHECK(playback_run(&running, &script, 0));
+            CHECK(running.user_quiet_ms == 20000);
+        }
     }
     printf("Playback control regression: %d failures; no input generated\n", failures);
     return failures ? 1 : 0;

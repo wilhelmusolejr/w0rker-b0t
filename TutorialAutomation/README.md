@@ -90,7 +90,20 @@ are downloaded and send no desktop input. A live coding task needs projects in
 `programming_files/`; run `tutorial.exe --fetch-projects` to prepare them. Settings are in
 [profiles/session.json](profiles/session.json). The monitor's `/status` shows the selected clock
 mode, Loggy3's separate state, and the current task; `monitor.exe --status` prints it locally.
-The combined session and recorder-failure recovery still need a short live acceptance run.
+A 20-minute live duration session completed with coding, browsing, and one app break
+while Loggy3 was unavailable. Recovery from a failure during confirmed recording
+still needs a live acceptance run.
+
+Set `"pause_on_user_input": false` in `profiles/session.json` to keep a work session
+running after manual mouse or keyboard input. This checkout uses `false`. Set it to
+`true` to wait for 20 seconds without manual input before resuming; omitting the
+field also uses `true`. Changes take effect on the next session launch. F8 still
+pauses/resumes and F9/F12 still stop immediately in either mode. Desktop and
+foreground checks still apply, so switching windows can interrupt an individual task.
+Work-session preparation uses the action timing in `profiles/programming.json`,
+as coding does: currently 250-800 ms between actions and 250-650 ms for control
+movement. Coding newline delays are 250-700 ms and periodic typing pauses are
+1.5-4 seconds. Character typing speed still follows the profile's `typing_speed`.
 
 ## Loggy3 recorder
 

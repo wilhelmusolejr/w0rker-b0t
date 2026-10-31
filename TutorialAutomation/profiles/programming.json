@@ -9,13 +9,13 @@
     "max_project_characters": 150000,
     "typing": {
         "character_ms": [110, 260],
-        "newline_ms": [600, 1700],
+        "newline_ms": [250, 700],
         "pause_every_chars": [160, 320],
-        "pause_ms": [4000, 11000]
+        "pause_ms": [1500, 4000]
     },
     "actions": {
-        "pause_ms": [1200, 2600],
-        "mouse_move_ms": [900, 1600]
+        "pause_ms": [250, 800],
+        "mouse_move_ms": [250, 650]
     },
     "checkpoint_seconds": 45,
     "idle_percent": 10,
