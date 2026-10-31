@@ -3,9 +3,10 @@
 Small, shippable tasks broken out from [task.md](task.md). Each one should fit in
 one sitting and end with something you can run, test, or dry-run.
 
-The [root README](README.md) proposes an ordered JSON action flow for the next
-rewrite. This tracker documents the current player and earlier profile-driven
-backlog; its scheduler tasks have not yet been recast for the new plan format.
+The [root README](README.md) describes the implemented first version of the
+ordered JSON flow. This tracker still contains the earlier profile-driven
+backlog; its old scheduler tasks are historical and have not been recast as
+flow-runner tasks.
 
 Active scope: one interactive Windows session for personal learning in
 accessibility automation and an AI helper. The current player follows configured
@@ -21,14 +22,32 @@ Size: **S** ≈ under an hour or two · **M** ≈ half a day to a day · **L** �
 `needs Dn` = waiting on an open decision at the bottom of this file.
 Sources (O1–O3, N1–N3) refer to the photos listed in task.md.
 
-## Start here
+## Current JSON flow
+
+`tutorial.exe --validate-flow FILE`, `--dry-run-flow FILE`, and `--flow FILE`
+validate, preview, and run an ordered step list. The [10-minute browsing
+example](TutorialAutomation/scripts/browse-10m-flow.json) is a short input-free
+validation target; the [workday example](TutorialAutomation/scripts/workday-flow.json)
+uses step checkpoints. Coding, browsing, Notepad, Calculator, app-window actions,
+and explicit Loggy3 actions are supported. Loggy3 is never started implicitly by
+the flow. See the [flow guide](TutorialAutomation/README.md#json-work-flows).
+
+The JSON parser and dry runs are tested. Short browsing-flow and full workday
+execution on a live desktop remain acceptance work. AI generation of JSON, Excel
+as a flow action, and the older backlog's broader scheduling ideas are not yet
+implemented in this runner.
+
+## Earlier profile-driven backlog
+
+The sequence below is the original plan for the profile and combined-session
+modes. The current JSON flow runner already wraps some of these activities;
+unchecked items here do not describe missing flow steps.
 
 1. **T1** profile config schema → **T2** dry-run prints it
 2. **T3** activity interface, wrapping the existing coding and browser visit code
 3. **T4** scheduler dry-run timeline
 
-These three give every later task somewhere to plug in, and none of them sends
-desktop input, so you can test them entirely with `--dry-run-config`.
+These were the original foundation tasks and remain for historical tracking.
 
 ---
 
@@ -82,7 +101,7 @@ with `--duration-minutes N`.
 | End | Finish a safe coding line, run the selected end look, wait to a local deadline if ending finishes early, and stop a confirmed recording. |
 | Controls | Telegram `/stop` winds down; F9/F12 stop immediately; F8 and remote pauses suspend local active time. |
 
-The current session is scripted and profile driven. Windows accessibility
+The older combined session is scripted and profile driven. Windows accessibility
 provides control names, states, and rectangles; foreground and desktop checks
 guard each input. Logs and saved-output verification show what actually ran.
 See [the session guide](TutorialAutomation/README.md#combined-work-session).
@@ -107,7 +126,7 @@ Run with `start-browsing.cmd [PROFILE_ID] [MINUTES]`; preview with `tutorial.exe
 
 | Status | ID | Task | Size | Source | Notes |
 |---|---|---|---|---|---|
-| [~] | T15 | Browser window open / close / minimize as separate actions, distinct from tab actions. | S | O1, N3 | Opening from the taskbar icon works (`browser_open_window`). Close and minimize actions not done yet. |
+| [~] | T15 | Browser window open / close / minimize as separate actions, distinct from tab actions. | S | O1, N3 | The JSON flow supports `app.ensure_open` and `app.close` for browser windows; a separate browser-minimize flow action is still missing. |
 | [x] | T16 | Site catalog file with categories (programming/docs, GitHub, lifestyle, social). Start with about 30 sites. `needs D12` for "dribble" | S | O1 | `profiles/browsing.json`: Superseded by T17. Reddit removed on request, so no social media. "dribble" left out until D12. |
 | [x] | T17 | Grow the site catalog to 100 sites. | S | N3 | 100 sites: 50 programming (31 docs, 6 GitHub, 13 blogs) and 50 others (food, home/plants, beauty/yoga, photography, travel, books, movies/K-dramas, games, tech/general news, science). All load without a login wall or automated-access challenge, checked 2026-10-28. |
 | [x] | T18 | Search topics driven by profile interests (questions, quotes, songs, apps, L3). | S | O3, N1 | Question, phrase, song lyrics, apps, and L3 templates filled from profile interests. |

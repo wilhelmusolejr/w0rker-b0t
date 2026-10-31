@@ -1,6 +1,19 @@
 # Changelog
 
+## 2026-11-01
+
+### Flow examples and guides
+
+- Added `scripts/browse-10m-flow.json`: one 10-minute active browsing step, with browser open/focus before the task, no checkpoint, and no Loggy3 action. The browser stays open after the step.
+- Added validation and dry-run CTest entries for the short example. Flow previews now show before/after actions, and validation checks their order. Updated the project, player, tracker, work-plan, and test guides to describe the implemented JSON action structure and commands.
+
 ## 2026-10-31
+
+### Explicit JSON flows
+
+- Added `--flow`, `--validate-flow`, and `--dry-run-flow` for sequential action lists. The 22-step example in `scripts/workday-flow.json` plans 630 minutes across coding, browsing, Notepad, Calculator, idle, and estimated transitions. Loggy3 actions are optional and run only when listed.
+- A live flow checkpoints completed steps, resumes after interruption, and can start over with `--restart-flow`. Coding uses the existing project history. F8 and remote pauses, plus planned idle, do not consume timed work budgets.
+- Browser steps reuse their chosen Chrome or Edge window. Note files get unique names when a step is retried. The new validator, sample preview, and focused tests pass; a full live workday has not yet been acceptance tested.
 
 ### Combined session timing
 

@@ -11,6 +11,7 @@ typedef struct BrowseSession {
     DWORD duration_ms;
     uint32_t seed;
     int via_taskbar;
+    HWND window; /* optional existing browser window to reuse */
     const struct SideAppsConfig *side_apps; /* optional side-app breaks; NULL for none */
     struct SideAppsTimer *apps;             /* optional: a timer shared with other tasks */
 } BrowseSession;

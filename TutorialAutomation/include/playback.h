@@ -10,6 +10,7 @@ struct BrowseSession;
 struct CodingProject;
 struct SideAppJob;
 struct LoggyJob;
+struct FlowJob;
 typedef struct Playback {
     volatile LONG stopped;
     volatile LONG user_stop; /* F9, F12, or Ctrl+C: never restarted automatically */
@@ -45,6 +46,7 @@ typedef struct Playback {
     const struct SideAppJob *side_app_job;
     struct LoggyJob *loggy_job;
     struct WorkSession *work_session;
+    struct FlowJob *flow_job;
     /* Session control. With soft_stop, a Telegram /stop sets wind_down (finish the line, save, run
        the ending) instead of stopping input at once; F9/F12 still stop at once. yield and deadline
        ask the running task to end at its next safe point. */
@@ -71,4 +73,7 @@ int playback_send(Playback *p, INPUT *input, UINT count);
 int playback_guard(Playback *p);
 /* Whether the current task should end at its next safe point (wind down, yield, or deadline). */
 int playback_yield(const Playback *p);
+/* Active-time deadline: F8/remote pauses do not consume a task's work budget. */
+void playback_deadline_after(Playback *p, ULONGLONG milliseconds);
+ULONGLONG playback_deadline_remaining(const Playback *p);
 #endif

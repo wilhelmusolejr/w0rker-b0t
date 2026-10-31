@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "workflow_id": "browse-10m",
+  "profile_id": 1,
+  "execution": {
+    "mode": "sequential",
+    "finish_when": "last_step_completes",
+    "checkpoint_after_each_step": false
+  },
+  "time_plan": {
+    "expected_total_minutes": 10,
+    "estimated_transitions_minutes": 0,
+    "idle_minutes_each": 1,
+    "idle_placement": "between_safe_points"
+  },
+  "steps": [
+    {
+      "id": "browse-for-10-minutes",
+      "action": "browser.browse",
+      "source": "profile_catalog",
+      "work_minutes": 10,
+      "idle_minutes": 0,
+      "before": ["ensure_open", "focus"]
+    }
+  ]
+}

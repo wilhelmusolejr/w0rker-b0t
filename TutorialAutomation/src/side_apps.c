@@ -472,7 +472,7 @@ static int use_notepad(Playback *p, const SideAppsConfig *c, const Profile *prof
     wchar_t title[256], folder[MAX_PATH], path[MAX_PATH], quoted[MAX_PATH + 3], note[2100], *stem;
     SYSTEMTIME now;
     HWND app;
-    unsigned notes = 0;
+    unsigned notes = 0, suffix;
     if (!open_app(p, rng, L"Notepad", L"notepad") || !coding_step_wait_window(p, NULL, L"Notepad.exe", NULL, NULL) || !playback_wait(p, 1500)) return 0;
     app = p->target;
     /* Notepad can reopen earlier tabs; write in a fresh one. */
@@ -492,7 +492,16 @@ static int use_notepad(Playback *p, const SideAppsConfig *c, const Profile *prof
     if (!side_apps_folder(c->notes_folder, profile, folder)) { playback_log(p, "notes_folder could not be resolved"); return 0; }
     CreateDirectoryW(folder, NULL);
     GetLocalTime(&now);
-    swprintf(path, MAX_PATH, L"%ls\\note-%04u-%02u-%02u-%02u%02u.txt", folder, now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute);
+    for (suffix = 0; suffix < 1000; ++suffix) {
+        int length = suffix ?
+            swprintf(path, MAX_PATH, L"%ls\\note-%04u-%02u-%02u-%02u%02u%02u-%u.txt", folder,
+                now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, suffix + 1) :
+            swprintf(path, MAX_PATH, L"%ls\\note-%04u-%02u-%02u-%02u%02u%02u.txt", folder,
+                now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond);
+        if (length < 0) { playback_log(p, "note path is too long"); return 0; }
+        if (GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND) break;
+    }
+    if (suffix == 1000) { playback_log(p, "cannot find a free note filename"); return 0; }
     swprintf(quoted, MAX_PATH + 3, L"\"%ls\"", path);
     stem = wcsrchr(path, L'\\') + 1;
     playback_log(p, "saving the note (Ctrl+S)");

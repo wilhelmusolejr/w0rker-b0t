@@ -1,5 +1,6 @@
 #include "work_session.h"
 #include "browser_session.h"
+#include "browser_action.h"
 #include "coding_steps.h"
 #include "json_config.h"
 #include "keyboard.h"
@@ -13,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
+#include <inttypes.h>
 
 static const wchar_t *const start_keys[START_LOOK_COUNT] = {L"desktop", L"vscode", L"browser", L"app"};
 static const wchar_t *const end_keys[END_LOOK_COUNT] = {L"direct", L"close_all", L"close_some"};
@@ -318,6 +320,7 @@ typedef struct {
     ULONGLONG coding_ms, browsing_ms;
     unsigned next_idle, idles_taken, idle_seconds;
     char last_task[160];      /* restored on Telegram after an idle */
+    HWND flow_vscode, flow_browser;
 } Run;
 static Run *watching;
 
@@ -513,19 +516,23 @@ static int coding_slot(Run *r, int open_only) {
         memset(&reference, 0, sizeof(reference)); memset(&plan, 0, sizeof(plan)); memset(&job, 0, sizeof(job));
         if (!project_select(r->s->programming, r->s->manifest, r->s->profile, &r->history, 1, &reference, &started,
                 destination, error, sizeof(error))) {
-            playback_log(p, "SESSION ALERT: no coding project to work on (%s); browsing instead from now on. "
+            if (p->flow_job) playback_log(p, "flow code.work cannot continue: %s", error);
+            else playback_log(p, "SESSION ALERT: no coding project to work on (%s); browsing instead from now on. "
                 "Add projects to profiles\\projects.json", error);
             r->coding_done = 1; project_reference_free(&reference); return 2;
         }
         if (!project_plan_build(&reference, started, destination, &plan, error, sizeof(error)) || plan.conflicts) {
-            playback_log(p, "the coding project cannot continue (%s); browsing instead from now on",
+            if (p->flow_job) playback_log(p, "flow code.work cannot continue: %s",
+                plan.conflicts ? "files conflict with the reference" : error);
+            else playback_log(p, "the coding project cannot continue (%s); browsing instead from now on",
                 plan.conflicts ? "files conflict with the reference" : error);
             r->coding_done = 1; project_plan_free(&plan); project_reference_free(&reference); return 2;
         }
         for (i = 0; i < reference.file_count; ++i) before += plan.steps[i].kind == STEP_CREATE || plan.steps[i].kind == STEP_RESUME;
         job.profile = r->s->profile; job.config = r->s->programming; job.history = &r->history;
         job.reference = &reference; job.plan = &plan; job.seed = r->s->seed + r->slot * 7919u;
-        job.side_apps = &r->breaks; job.apps = &r->timer;
+        job.side_apps = r->s->side_apps ? &r->breaks : NULL;
+        job.apps = r->s->side_apps || p->flow_job ? &r->timer : NULL;
         ok = coding_project_run(p, &job);
         for (i = 0; i < reference.file_count; ++i) after += plan.steps[i].kind == STEP_CREATE || plan.steps[i].kind == STEP_RESUME;
         r->files_done += (unsigned)(before - after);
@@ -565,6 +572,7 @@ static BOOL CALLBACK collect_app(HWND w, LPARAM parameter) {
     memset(&app, 0, sizeof(app)); app.window = w;
     if (window_process_is(w, L"Code.exe")) { app.taskbar = L"Visual Studio Code"; app.name = "VS Code"; app.vscode = 1; }
     else if (window_process_is(w, L"chrome.exe") && !wcscmp(cls, L"Chrome_WidgetWin_1")) { app.taskbar = L"Google Chrome"; app.name = "Chrome"; }
+    else if (window_process_is(w, L"msedge.exe") && !wcscmp(cls, L"Chrome_WidgetWin_1")) { app.taskbar = L"Microsoft Edge"; app.name = "Edge"; }
     else if (window_process_is(w, L"Notepad.exe")) { app.taskbar = L"Notepad"; app.name = "Notepad"; }
     else if (!wcscmp(cls, L"CabinetWClass") && window_process_is(w, L"explorer.exe")) { app.taskbar = L"File Explorer"; app.name = "File Explorer"; }
     else if (!wcscmp(cls, L"ApplicationFrameWindow") && !wcscmp(title, L"Calculator")) { app.taskbar = L"Calculator"; app.name = "Calculator"; }
@@ -643,7 +651,11 @@ static int browsing_slot(Run *r, unsigned minutes, int quiet) {
     session.profile = r->s->profile; session.catalog = r->s->catalog;
     session.duration_ms = minutes ? minutes * 60000 : motion_between(&r->rng, 60, 120) * 1000;
     session.seed = r->s->seed + r->slot * 104729u; session.via_taskbar = 1;
+    if (p->flow_job && r->flow_browser && IsWindow(r->flow_browser) &&
+        (window_process_is(r->flow_browser, L"chrome.exe") || window_process_is(r->flow_browser, L"msedge.exe")))
+        session.window = r->flow_browser;
     if (!quiet) { session.side_apps = &r->breaks; session.apps = &r->timer; }
+    else if (p->flow_job && p->safe_point) session.apps = &r->timer;
     ok = browser_session_run(p, &session);
     if (!ok || quiet || winding_down(p) || r->target_reached) return ok;
     /* Done with the browser for now: minimize it, close it, or just leave it behind the next task. */
@@ -927,6 +939,7 @@ int work_session_run(Playback *p, WorkSession *s) {
     for (i = 0; !winding_down(p) && !r->target_reached; ++i) {
         SessionSlot slot = r->plan.slots[i % r->plan.slot_count];
         ULONGLONG started = GetTickCount64();
+        ULONGLONG paused_started = p->paused_ms;
         int result;
         if (r->loggy_lost) {
             p->deadline = 0; InterlockedExchange(&p->yield, 0);
@@ -940,19 +953,22 @@ int work_session_run(Playback *p, WorkSession *s) {
         if (winding_down(p) || r->target_reached) break;
         if (slot.coding && r->coding_done) slot.coding = 0;
         InterlockedExchange(&p->yield, 0);
-        p->deadline = GetTickCount64() + slot.minutes * 60000ULL;
+        playback_deadline_after(p, slot.minutes * 60000ULL);
         task(r, slot.coding ? "coding" : "browsing", slot.minutes);
         result = slot.coding ? coding_slot(r, 0) : browsing_slot(r, slot.minutes, 0);
         if (slot.coding && result == 2) {
             /* No coding left: the rest of this slot is browsing, and counts as browsing. */
             ULONGLONG now = GetTickCount64();
-            unsigned left = p->deadline > now ? (unsigned)((p->deadline - now + 59999) / 60000) : 1;
-            r->coding_ms += now - started; started = now; slot.coding = 0;
+            unsigned left = (unsigned)((playback_deadline_remaining(p) + 59999) / 60000);
+            if (!left) left = 1;
+            r->coding_ms += now - started - (p->paused_ms - paused_started);
+            started = now; paused_started = p->paused_ms; slot.coding = 0;
             task(r, "browsing", left);
             result = browsing_slot(r, left, 0);
         }
         p->deadline = 0;
-        if (slot.coding) r->coding_ms += GetTickCount64() - started; else r->browsing_ms += GetTickCount64() - started;
+        if (slot.coding) r->coding_ms += GetTickCount64() - started - (p->paused_ms - paused_started);
+        else r->browsing_ms += GetTickCount64() - started - (p->paused_ms - paused_started);
         if (result) { r->failures = 0; continue; }
         if (stopped_by_user(p) || !recover(p)) { hard = 1; goto done; }
         if (++r->failures >= 3) { playback_log(p, "SESSION ALERT: three slots in a row failed; ending the day"); break; }
@@ -999,6 +1015,274 @@ done:
         r->recording ? "RECORDING" : r->loggy_unavailable ? "unconfirmed" : "as it was");
     watching = NULL; p->watch = NULL; p->safe_point = NULL; p->deadline = 0; p->soft_stop = 0;
     if (r->history_loaded) project_history_free(&r->history);
+    free(r);
+    return ok;
+}
+
+/* ---------- explicit JSON flow ---------- */
+
+static int flow_window_matches(const OpenApp *item, FlowApp app) {
+    switch (app) {
+        case FLOW_APP_VSCODE: return item->vscode;
+        case FLOW_APP_BROWSER: return !strcmp(item->name, "Chrome") || !strcmp(item->name, "Edge");
+        case FLOW_APP_NOTEPAD: return !strcmp(item->name, "Notepad");
+        case FLOW_APP_CALCULATOR: return !strcmp(item->name, "Calculator");
+        default: return 0;
+    }
+}
+static int flow_find_app(FlowApp kind, HWND preferred, OpenApp *out) {
+    OpenApps apps;
+    unsigned i;
+    open_apps(&apps);
+    for (i = 0; preferred && i < apps.count; ++i)
+        if (apps.items[i].window == preferred && flow_window_matches(&apps.items[i], kind)) {
+            *out = apps.items[i]; return 1;
+        }
+    for (i = 0; i < apps.count; ++i) if (flow_window_matches(&apps.items[i], kind)) {
+        *out = apps.items[i]; return 1;
+    }
+    return 0;
+}
+static int flow_app_action(Run *r, FlowApp kind, FlowAction action) {
+    Playback *p = r->p;
+    OpenApp app;
+    if (action == FLOW_ENSURE_OPEN && kind == FLOW_APP_VSCODE && r->s->programming && r->s->manifest) {
+        int result;
+        /* Prepare the current coding project and leave its editor ready. */
+        InterlockedExchange(&p->yield, 1);
+        result = coding_slot(r, 1);
+        InterlockedExchange(&p->yield, 0);
+        if (result == 1 && p->target && window_process_is(p->target, L"Code.exe")) r->flow_vscode = p->target;
+        return result == 1;
+    }
+    if (!flow_find_app(kind, kind == FLOW_APP_VSCODE ? r->flow_vscode :
+                       kind == FLOW_APP_BROWSER ? r->flow_browser : p->target, &app)) {
+        if (action == FLOW_CLOSE) return 1; /* already closed */
+        if (action != FLOW_ENSURE_OPEN) {
+            playback_log(p, "%s is not open", flow_app_name(kind)); return 0;
+        }
+        if (kind == FLOW_APP_VSCODE) {
+            int result = start_menu_open(p, &r->rng, L"Visual Studio Code");
+            if (result != 1) { playback_log(p, "could not open VS Code from Start"); return 0; }
+            if (!coding_step_wait_window(p, NULL, L"Code.exe", NULL, NULL)) return 0;
+            r->flow_vscode = p->target;
+            return 1;
+        }
+        if (kind == FLOW_APP_BROWSER) {
+            HWND opened = NULL;
+            int ok = browser_open_window(p, NULL, 1, &opened);
+            if (ok) r->flow_browser = opened;
+            return ok;
+        }
+        return side_apps_open(p, &r->rng, kind == FLOW_APP_NOTEPAD ? APP_NOTEPAD : APP_CALCULATOR);
+    }
+    if (action == FLOW_ENSURE_OPEN || action == FLOW_FOCUS) {
+        if (kind == FLOW_APP_VSCODE) r->flow_vscode = app.window;
+        if (kind == FLOW_APP_BROWSER) r->flow_browser = app.window;
+        return bring_front(p, &r->rng, &app);
+    }
+    if (action == FLOW_CLOSE) return close_app(r, &app, CLOSE_ALT_F4);
+    if (action == FLOW_SAVE) {
+        wchar_t title[256];
+        if (kind != FLOW_APP_VSCODE && kind != FLOW_APP_NOTEPAD) return 0;
+        if (kind == FLOW_APP_NOTEPAD && GetWindowTextW(app.window, title, 256) && wcsstr(title, L"Untitled")) {
+            playback_log(p, "Notepad has no filename; use notepad.write_notes to save a named note"); return 0;
+        }
+        return bring_front(p, &r->rng, &app) && shortcut(p, VK_CONTROL, L'S');
+    }
+    return 0;
+}
+static int flow_checkpoint_read(const FlowJob *job, unsigned *next, char *error, size_t cap) {
+    const FlowConfig *flow = job->config;
+    JsonValue *root = NULL;
+    const JsonValue *id, *fingerprint, *step;
+    wchar_t *content = NULL, expected[24];
+    DWORD attributes;
+    *next = 0;
+    if (!flow->checkpoint_after_each_step) return 1;
+    if (!job->progress_path || !*job->progress_path) return fail(error, cap, "flow progress path is missing");
+    if (job->restart) {
+        if (!DeleteFileW(job->progress_path) && GetLastError() != ERROR_FILE_NOT_FOUND)
+            return fail(error, cap, "cannot reset flow checkpoint");
+        return 1;
+    }
+    attributes = GetFileAttributesW(job->progress_path);
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        if (GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND) return 1;
+        return fail(error, cap, "cannot inspect flow checkpoint");
+    }
+    if (attributes & FILE_ATTRIBUTE_DIRECTORY) return fail(error, cap, "flow checkpoint path is a directory");
+    if (!read_utf8(job->progress_path, &content, error, cap)) return 0;
+    if (!json_parse(content, &root, error, cap)) { free(content); return 0; }
+    free(content);
+    id = json_get(root, L"workflow_id"); fingerprint = json_get(root, L"fingerprint"); step = json_get(root, L"next_step");
+    swprintf(expected, 24, L"%016llx", (unsigned long long)flow->fingerprint);
+    if (!id || id->kind != JSON_STRING || strlen(flow->workflow_id) != wcslen(id->string) ||
+        !fingerprint || fingerprint->kind != JSON_STRING || wcscmp(fingerprint->string, expected) ||
+        !step || step->kind != JSON_NUMBER || step->number > flow->step_count) {
+        json_free(root);
+        return fail(error, cap, "checkpoint does not match this flow; use --restart-flow to begin again");
+    }
+    {
+        size_t i;
+        for (i = 0; i < strlen(flow->workflow_id); ++i) if (id->string[i] != (wchar_t)flow->workflow_id[i]) {
+            json_free(root); return fail(error, cap, "checkpoint belongs to another workflow");
+        }
+    }
+    *next = step->number;
+    json_free(root);
+    return 1;
+}
+static int flow_checkpoint_write(const FlowJob *job, unsigned next, char *error, size_t cap) {
+    const FlowConfig *flow = job->config;
+    wchar_t temp[MAX_PATH];
+    FILE *file;
+    int wrote;
+    if (!flow->checkpoint_after_each_step) return 1;
+    if (swprintf(temp, MAX_PATH, L"%ls.tmp-%lu", job->progress_path, GetCurrentProcessId()) < 0)
+        return fail(error, cap, "flow checkpoint path is too long");
+    file = _wfopen(temp, L"wb");
+    if (!file) return fail(error, cap, "cannot write flow checkpoint");
+    wrote = fprintf(file, "{\"workflow_id\":\"%s\",\"fingerprint\":\"%016" PRIx64 "\",\"next_step\":%u}\n",
+                    flow->workflow_id, flow->fingerprint, next) > 0;
+    if (fclose(file) || !wrote || !MoveFileExW(temp, job->progress_path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileW(temp);
+        return fail(error, cap, "cannot commit flow checkpoint");
+    }
+    return 1;
+}
+static int flow_idle(Playback *p, unsigned minutes) {
+    unsigned seconds = minutes * 60, i;
+    ULONGLONG started = GetTickCount64(), paused = p->paused_ms;
+    playback_log(p, "flow idle: %u minute(s)", minutes);
+    for (i = 0; i < seconds; ++i) {
+        if (winding_down(p) || stopped_by_user(p) || !playback_wait(p, 1000)) return 0;
+    }
+    /* Planned idle is outside the work budget, just like an F8 pause. */
+    p->paused_ms += GetTickCount64() - started - (p->paused_ms - paused);
+    return 1;
+}
+typedef struct {
+    Playback *p;
+    ULONGLONG started_active;
+    unsigned work_minutes, idle_count, next_idle, idle_each;
+} FlowIdle;
+static FlowIdle *flow_idling;
+static int flow_safe_point(Playback *p) {
+    FlowIdle *idle = flow_idling;
+    ULONGLONG due;
+    if (!idle || idle->p != p || idle->next_idle >= idle->idle_count || playback_yield(p)) return 1;
+    due = idle->started_active + (ULONGLONG)idle->work_minutes * 60000 *
+          (idle->next_idle + 1) / (idle->idle_count + 1);
+    if (GetTickCount64() - p->paused_ms < due) return 1;
+    ++idle->next_idle;
+    return flow_idle(p, idle->idle_each);
+}
+static int flow_timed_work(Run *r, const FlowStep *step, const FlowConfig *flow) {
+    Playback *p = r->p;
+    FlowIdle idle;
+    int ok;
+    memset(&idle, 0, sizeof(idle));
+    idle.p = p; idle.started_active = GetTickCount64() - p->paused_ms;
+    idle.work_minutes = step->work_minutes;
+    idle.idle_count = step->idle_minutes / flow->idle_minutes_each;
+    idle.idle_each = flow->idle_minutes_each;
+    flow_idling = &idle;
+    p->safe_point = flow_safe_point;
+    playback_deadline_after(p, (ULONGLONG)step->work_minutes * 60000);
+    if (step->action == FLOW_CODE) {
+        ok = coding_slot(r, 0) == 1;
+        if (ok && p->target && window_process_is(p->target, L"Code.exe")) r->flow_vscode = p->target;
+    } else {
+        ok = browsing_slot(r, step->work_minutes, 1);
+        if (ok && p->target && (window_process_is(p->target, L"chrome.exe") ||
+                               window_process_is(p->target, L"msedge.exe"))) r->flow_browser = p->target;
+    }
+    p->deadline = 0; p->safe_point = NULL; flow_idling = NULL;
+    if (!ok || winding_down(p) || stopped_by_user(p)) return 0;
+    while (idle.next_idle++ < idle.idle_count)
+        if (!flow_idle(p, idle.idle_each)) return 0;
+    return 1;
+}
+static int flow_step_run(Run *r, const FlowStep *step, const FlowConfig *flow, const SideAppsConfig *apps) {
+    Playback *p = r->p;
+    unsigned flags = step->lifecycle;
+    int managed = step->action == FLOW_NOTES || step->action == FLOW_CALCULATE;
+    int ok = 0;
+    /* The side-app action itself opens/focuses, saves (Notepad), and closes its window. */
+    if (!managed) {
+        if ((flags & FLOW_BEFORE_OPEN) && !flow_app_action(r, step->app, FLOW_ENSURE_OPEN)) return 0;
+        if ((flags & FLOW_BEFORE_FOCUS) && !flow_app_action(r, step->app, FLOW_FOCUS)) return 0;
+    }
+    switch (step->action) {
+        case FLOW_ENSURE_OPEN: case FLOW_FOCUS: case FLOW_SAVE: case FLOW_CLOSE:
+            ok = flow_app_action(r, step->app, step->action); break;
+        case FLOW_CODE: case FLOW_BROWSE: ok = flow_timed_work(r, step, flow); break;
+        case FLOW_NOTES: case FLOW_CALCULATE: {
+            SideAppsConfig config;
+            if (!apps) { playback_log(p, "apps.json is required for this step"); return 0; }
+            config = *apps; config.leave_open_percent = 0;
+            ok = side_apps_run(p, &config, r->s->profile,
+                step->action == FLOW_NOTES ? APP_NOTEPAD : APP_CALCULATOR,
+                step->work_minutes * 60000u, &r->rng);
+            break;
+        }
+        case FLOW_LOGGY_STATUS: ok = loggy(r, LOGGY_STATUS, 0); break;
+        case FLOW_LOGGY_SHOW: ok = loggy(r, LOGGY_SHOW, 0); break;
+        case FLOW_LOGGY_MINIMIZE: ok = loggy(r, LOGGY_MINIMIZE, 0); break;
+        case FLOW_LOGGY_CLOSE: ok = loggy(r, LOGGY_CLOSE, 0); break;
+        case FLOW_LOGGY_RECORD: ok = loggy(r, LOGGY_RECORD, 0); break;
+        case FLOW_LOGGY_STOP: ok = loggy(r, LOGGY_STOP, 0); break;
+    }
+    if (!ok || winding_down(p) || stopped_by_user(p)) return 0;
+    if (!managed) {
+        if ((flags & FLOW_AFTER_SAVE) && !flow_app_action(r, step->app, FLOW_SAVE)) return 0;
+        if ((flags & FLOW_AFTER_CLOSE) && !flow_app_action(r, step->app, FLOW_CLOSE)) return 0;
+    }
+    return 1;
+}
+int flow_run(Playback *p, FlowJob *job) {
+    Run *r = calloc(1, sizeof(*r));
+    const FlowConfig *flow = job->config;
+    char error[512];
+    unsigned next, i;
+    int ok = 0;
+    if (!r) { playback_log(p, "out of memory"); return 0; }
+    r->p = p; r->s = job->resources;
+    r->s->seed = job->seed;
+    p->typing_speed = r->s->profile->typing_speed;
+    p->typo_percent = profile_mistype_percent(r->s->profile);
+    p->typo_state = job->seed ^ 0x9e3779b9u;
+    motion_seed(&r->rng, job->seed * 2654435761u + 3);
+    motion_hand_for(&p->hand, motion_hash(r->s->profile->local_id), r->s->profile->randomness_score);
+    p->client_coords = 0; p->soft_stop = 1;
+    if (!p->target) p->target = GetForegroundWindow();
+    if (!flow_checkpoint_read(job, &next, error, sizeof(error))) {
+        playback_log(p, "flow checkpoint: %s", error); goto done;
+    }
+    if (next == flow->step_count) {
+        playback_log(p, "flow %s already completed; use --restart-flow to run it again", flow->workflow_id);
+        ok = 1; goto done;
+    }
+    playback_log(p, "flow %s: starting step %u of %u; Loggy3 is controlled only by explicit steps",
+                 flow->workflow_id, next + 1, flow->step_count);
+    for (i = next; i < flow->step_count; ++i) {
+        const FlowStep *step = &flow->steps[i];
+        r->slot = i + 1;
+        playback_log(p, "flow step %u/%u %s: %s", i + 1, flow->step_count, step->id, flow_action_name(step->action));
+        if (!flow_step_run(r, step, flow, job->apps)) {
+            playback_log(p, "flow stopped at step %s; completed steps remain checkpointed", step->id);
+            goto done;
+        }
+        if (!flow_checkpoint_write(job, i + 1, error, sizeof(error))) {
+            playback_log(p, "flow checkpoint: %s", error); goto done;
+        }
+    }
+    playback_log(p, "flow %s complete after its last step", flow->workflow_id);
+    ok = 1;
+done:
+    p->deadline = 0; p->soft_stop = 0;
+    project_history_free(&r->history);
     free(r);
     return ok;
 }

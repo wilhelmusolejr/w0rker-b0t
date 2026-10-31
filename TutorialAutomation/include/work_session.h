@@ -6,6 +6,7 @@
 #include "project_manifest.h"
 #include "browse_catalog.h"
 #include "side_apps.h"
+#include "flow_config.h"
 /* One accessibility-driven work session. A supplied duration is measured locally; otherwise
    Loggy3's daily total controls the target while readable. Work continues on a local countdown
    if the recorder becomes unavailable. Settings are in profiles/session.json. */
@@ -87,4 +88,13 @@ typedef struct WorkSession {
     unsigned duration_minutes; /* 0: Loggy3 daily target; otherwise requested local session budget */
 } WorkSession;
 int work_session_run(Playback *p, WorkSession *session);
+typedef struct FlowJob {
+    const FlowConfig *config;
+    WorkSession *resources;
+    const SideAppsConfig *apps;
+    const wchar_t *progress_path;
+    uint32_t seed;
+    int restart;
+} FlowJob;
+int flow_run(Playback *p, FlowJob *job);
 #endif

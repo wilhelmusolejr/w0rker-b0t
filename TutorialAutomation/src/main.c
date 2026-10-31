@@ -11,6 +11,7 @@
 #include "side_apps.h"
 #include "loggy3.h"
 #include "work_session.h"
+#include "flow_config.h"
 #include <shellapi.h>
 #include <stdlib.h>
 #include <wchar.h>
@@ -55,6 +56,9 @@ static void usage(void) {
          "tutorial --fetch-projects [--programming FILE.json]   (clone every listed project at its pinned commit)\n"
          "tutorial --apps PROFILE_ID [--app notepad|explorer|calculator|images] [--minutes N] [--seed N]\n"
          "tutorial --session PROFILE_ID | --dry-run-session PROFILE_ID [--seed N] [--countdown SECONDS] [--log FILE]\n"
+         "tutorial --flow FILE.json | --validate-flow FILE.json | --dry-run-flow FILE.json\n"
+         "         [--seed N] [--countdown SECONDS] [--profiles FILE.json] [--programming FILE.json]\n"
+         "         [--browsing FILE.json] [--apps-config FILE.json] [--progress FILE.json] [--restart-flow] [--log FILE]\n"
          "         [--duration-minutes N | --target-minutes N] [--coding-minutes N] [--browsing-minutes N]\n"
          "         (duration: this run, independent of Loggy3; default: today's Loggy3 target with a local fallback)\n"
          "tutorial --loggy3 status|show|minimize|close|record|stop|demo [--dry-run] [--hover-only] [--hover-seconds N]\n"
@@ -513,6 +517,129 @@ finish:
     project_manifest_free(&manifest); programming_config_free(&programming); profile_free(&profiles);
     return exit_code;
 }
+/* A sequential JSON flow. Only listed actions run; Loggy3 is never started automatically. */
+static int flow_main(wchar_t **argv, int argc) {
+    const wchar_t *flow_path = NULL, *profiles_path = NULL, *programming_path = NULL;
+    const wchar_t *browsing_path = NULL, *apps_path = NULL, *log_path = NULL, *progress_path = NULL;
+    wchar_t profiles_default[MAX_PATH], programming_default[MAX_PATH], browsing_default[MAX_PATH];
+    wchar_t apps_default[MAX_PATH], generated_progress[MAX_PATH], workflow_wide[80];
+    unsigned long seed = 0, countdown = 10;
+    int i, mode = 0, restart = 0, code_needed = 0, browse_needed = 0, apps_needed = 0;
+    int ok, exit_code = 2;
+    FlowConfig flow;
+    ProfileSet profiles = {0};
+    ProgrammingConfig programming = {0};
+    ProjectManifest manifest = {0};
+    BrowseCatalog catalog = {0};
+    SideAppsConfig apps = {0};
+    WorkSession resources = {0};
+    FlowJob job = {0};
+    Script script = {0};
+    Playback p = {0};
+    char error[512];
+    for (i = 1; i < argc; ++i) {
+        if (!wcscmp(argv[i], L"--flow") || !wcscmp(argv[i], L"--validate-flow") || !wcscmp(argv[i], L"--dry-run-flow")) {
+            if (mode || i + 1 >= argc) goto invalid;
+            mode = !wcscmp(argv[i], L"--flow") ? 1 : !wcscmp(argv[i], L"--validate-flow") ? 2 : 3;
+            flow_path = argv[++i];
+        } else if (!wcscmp(argv[i], L"--seed")) {
+            if (!number_argument(argv, argc, &i, 0, INT32_MAX, &seed)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--countdown")) {
+            if (!number_argument(argv, argc, &i, 0, 3600, &countdown)) goto invalid;
+        } else if (!wcscmp(argv[i], L"--profiles") && i+1 < argc && !profiles_path) profiles_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--programming") && i+1 < argc && !programming_path) programming_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--browsing") && i+1 < argc && !browsing_path) browsing_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--apps-config") && i+1 < argc && !apps_path) apps_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--progress") && i+1 < argc && !progress_path) progress_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--log") && i+1 < argc && !log_path) log_path = argv[++i];
+        else if (!wcscmp(argv[i], L"--restart-flow")) restart = 1;
+        else goto invalid;
+    }
+    if (!mode || (restart && mode != 1)) goto invalid;
+    if (!flow_config_load(flow_path, &flow, error, sizeof(error))) { fprintf(stderr, "flow: %s\n", error); goto finish; }
+    flow_config_print(&flow);
+    if (mode == 2) { exit_code = 0; goto finish; }
+    if (!profiles_path) {
+        if (!default_profile_file(L"profiles.json", profiles_default)) { fputs("profiles\\profiles.json not found; use --profiles\n", stderr); goto finish; }
+        profiles_path = profiles_default;
+    }
+    if (!profile_load(profiles_path, &profiles, error, sizeof(error))) { fprintf(stderr, "profiles: %s\n", error); goto finish; }
+    resources.profile = profile_find(&profiles, flow.profile_id);
+    if (!resources.profile) { fprintf(stderr, "no profile with id %u\n", flow.profile_id); goto finish; }
+    if (mode == 3) { puts("Dry-run complete; no input generated and no progress written."); exit_code = 0; goto finish; }
+    for (i = 0; i < (int)flow.step_count; ++i) {
+        FlowAction action = flow.steps[i].action;
+        if (action == FLOW_CODE) code_needed = 1;
+        if (action == FLOW_BROWSE) browse_needed = 1;
+        if (action == FLOW_NOTES || action == FLOW_CALCULATE) apps_needed = 1;
+    }
+    if (code_needed || (flow.checkpoint_after_each_step && !progress_path)) {
+        if (!programming_path) {
+            if (!default_profile_file(L"programming.json", programming_default)) { fputs("profiles\\programming.json not found; use --programming\n", stderr); goto finish; }
+            programming_path = programming_default;
+        }
+        if (!programming_config_load(programming_path, &programming, error, sizeof(error))) { fprintf(stderr, "programming: %s\n", error); goto finish; }
+        resources.programming = &programming;
+    }
+    if (code_needed) {
+        if (resources.profile->main_task != PROFILE_TASK_PROGRAMMING || !resources.profile->project_path) {
+            fputs("this profile has no programming project_path\n", stderr); goto finish;
+        }
+        if (!project_manifest_load(programming.project_list, &manifest, error, sizeof(error))) { fprintf(stderr, "projects: %s\n", error); goto finish; }
+        resources.manifest = &manifest;
+    }
+    if (browse_needed) {
+        if (!browsing_path) {
+            if (!default_profile_file(L"browsing.json", browsing_default)) { fputs("profiles\\browsing.json not found; use --browsing\n", stderr); goto finish; }
+            browsing_path = browsing_default;
+        }
+        if (!browse_catalog_load(browsing_path, &catalog, error, sizeof(error))) { fprintf(stderr, "browsing: %s\n", error); goto finish; }
+        resources.catalog = &catalog;
+    }
+    if (apps_needed) {
+        if (!apps_path) {
+            if (!default_profile_file(L"apps.json", apps_default)) { fputs("profiles\\apps.json not found; use --apps-config\n", stderr); goto finish; }
+            apps_path = apps_default;
+        }
+        if (!side_apps_load(apps_path, &apps, error, sizeof(error))) { fprintf(stderr, "apps: %s\n", error); goto finish; }
+        job.apps = &apps;
+    }
+    if (flow.checkpoint_after_each_step && !progress_path) {
+        size_t j;
+        if (!CreateDirectoryW(programming.progress_folder, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+            fputs("cannot create flow progress folder\n", stderr); goto finish;
+        }
+        for (j = 0; flow.workflow_id[j]; ++j) workflow_wide[j] = (wchar_t)flow.workflow_id[j];
+        workflow_wide[j] = 0;
+        if (swprintf(generated_progress, MAX_PATH, L"%ls\\flow-%ls-%u.json", programming.progress_folder,
+                     workflow_wide, flow.profile_id) < 0) { fputs("flow progress path is too long\n", stderr); goto finish; }
+        progress_path = generated_progress;
+    }
+    job.config = &flow; job.resources = &resources; job.progress_path = progress_path;
+    job.seed = seed ? (uint32_t)seed : action_recording_seed(); job.restart = restart;
+    script.commands = calloc(1, sizeof(*script.commands));
+    if (!script.commands) goto finish;
+    script.count = 1; script.commands[0].kind = CMD_FLOW; script.commands[0].line = 1;
+    p.flow_job = &job;
+    p.log = execution_log(log_path);
+    if (!p.log) { fputs("Cannot open execution log. Use --log with a writable path.\n", stderr); goto finish; }
+    window_enable_dpi();
+    active = &p; SetConsoleCtrlHandler(console_control, TRUE);
+    SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+    if (!playback_remote_open()) playback_log(&p, "remote control events unavailable; Telegram /pause /resume /stop will not work");
+    ok = playback_run(&p, &script, (DWORD)countdown * 1000);
+    SetConsoleCtrlHandler(console_control, FALSE); active = NULL;
+    playback_remote_close(); SetThreadExecutionState(ES_CONTINUOUS);
+    exit_code = ok ? 0 : 1;
+    goto finish;
+invalid:
+    usage();
+finish:
+    if (p.log) fclose(p.log);
+    script_free(&script); side_apps_free(&apps); browse_catalog_free(&catalog);
+    project_manifest_free(&manifest); programming_config_free(&programming); profile_free(&profiles);
+    return exit_code;
+}
 /* Clone every project in the list ahead of time, at its pinned commit. */
 static int fetch_main(wchar_t **argv, int argc) {
     const wchar_t *programming_path = NULL;
@@ -563,6 +690,8 @@ int main(void) {
             exit_code = apps_main(argv, argc); LocalFree(argv); return exit_code;
         } else if (!wcscmp(argv[i], L"--session") || !wcscmp(argv[i], L"--dry-run-session")) {
             exit_code = session_main(argv, argc); LocalFree(argv); return exit_code;
+        } else if (!wcscmp(argv[i], L"--flow") || !wcscmp(argv[i], L"--validate-flow") || !wcscmp(argv[i], L"--dry-run-flow")) {
+            exit_code = flow_main(argv, argc); LocalFree(argv); return exit_code;
         } else if (!wcscmp(argv[i], L"--loggy3")) {
             exit_code = loggy_main(argv, argc); LocalFree(argv); return exit_code;
         } else if (!wcscmp(argv[i], L"--fetch-projects")) {

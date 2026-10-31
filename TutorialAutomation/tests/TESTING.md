@@ -1,5 +1,19 @@
 # Verification and desktop acceptance tests
 
+## JSON flow examples - 2026-11-01
+
+The native player rebuilt successfully. Five focused CTest checks passed:
+`flow_config_tests`, `validate_workday_flow`, `dry_run_workday_flow`,
+`validate_browse_10m_flow`, and `dry_run_browse_10m_flow`. The short flow's dry
+run printed one `browser.browse` step with 10 work minutes, zero planned idle,
+zero other-app minutes, and no Loggy3 action. Validation and dry run generated
+no desktop input and wrote no progress file.
+
+The short browsing flow and the 10h30m workday flow have not been run live from
+their JSON configurations. A live check needs an unlocked interactive Windows
+desktop; browser launch, page load, and safe-point behavior are not established
+by these input-free tests.
+
 ## Manual input configuration and pacing - 2026-10-31
 
 The native player and regression targets rebuilt successfully. All five selected

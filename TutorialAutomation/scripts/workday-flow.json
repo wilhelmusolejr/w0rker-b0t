@@ -1,0 +1,265 @@
+{
+  "version": 1,
+  "workflow_id": "profile-1-workday",
+  "profile_id": 1,
+  "execution": {
+    "mode": "sequential",
+    "finish_when": "last_step_completes",
+    "checkpoint_after_each_step": true
+  },
+  "time_plan": {
+    "expected_total_minutes": 630,
+    "estimated_transitions_minutes": 5,
+    "idle_minutes_each": 1,
+    "idle_placement": "between_safe_points"
+  },
+  "steps": [
+    {
+      "id": "open-code",
+      "action": "app.ensure_open",
+      "app": "vscode"
+    },
+    {
+      "id": "code-01",
+      "action": "code.work",
+      "project": "resume_or_next",
+      "work_minutes": 60,
+      "idle_minutes": 5,
+      "before": [
+        "ensure_open",
+        "focus"
+      ],
+      "after": [
+        "save"
+      ]
+    },
+    {
+      "id": "browse-01",
+      "action": "browser.browse",
+      "source": "profile_catalog",
+      "work_minutes": 15,
+      "idle_minutes": 2,
+      "before": [
+        "ensure_open",
+        "focus"
+      ]
+    },
+    {
+      "id": "code-02",
+      "action": "code.work",
+      "project": "resume_or_next",
+      "work_minutes": 55,
+      "idle_minutes": 5,
+      "before": [
+        "ensure_open",
+        "focus"
+      ],
+      "after": [
+        "save"
+      ]
+    },
+    {
+      "id": "browse-02",
+      "action": "browser.browse",
+      "source": "profile_catalog",
+      "work_minutes": 15,
+      "idle_minutes": 2,
+      "before": [
+        "ensure_open",
+        "focus"
+      ]
+    },
+    {
+      "id": "code-03",
+      "action": "code.work",
+      "project": "resume_or_next",
+      "work_minutes": 55,
+      "idle_minutes": 6,
+      "before": [
+        "ensure_open",
+        "focus"
+      ],
+      "after": [
+        "save"
+      ]
+    },
+    {
+      "id": "browse-03",
+      "action": "browser.browse",
+      "source": "profile_catalog",
+      "work_minutes": 15,
+      "idle_minutes": 2,
+      "before": [
+        "ensure_open",
+        "focus"
+      ]
+    },
+    {
+      "id": "notes-01",
+      "action": "notepad.write_notes",
+      "work_minutes": 10,
+      "idle_minutes": 0,
+      "before": [
+        "ensure_open",
+        "focus"
+      ],
+      "after": [
+        "save",
+        "close"
+      ]
+    },
+    {
+      "id": "code-04",
+      "action": "code.work",
+      "project": "resume_or_next",
+      "work_minutes": 50,
+      "idle_minutes": 4,
+      "before": [
+        "ensure_open",
+        "focus"
+      ],
+      "after": [
+        "save"
+      ]
+    },
+    {
+      "id": "browse-04",
+      "action": "browser.browse",
+      "source": "profile_catalog",
+      "work_minutes": 15,
+      "idle_minutes": 2,
+      "before": [
+        "ensure_open",
+        "focus"
+      ]
+    },
+    {
+      "id": "code-05",
+      "action": "code.work",
+      "project": "resume_or_next",
+      "work_minutes": 50,
+      "idle_minutes": 5,
+      "before": [
+        "ensure_open",
+        "focus"
+      ],
+      "after": [
+        "save"
+      ]
+    },
+    {
+      "id": "browse-05",
+      "action": "browser.browse",
+      "source": "profile_catalog",
+      "work_minutes": 15,
+      "idle_minutes": 2,
+      "before": [
+        "ensure_open",
+        "focus"
+      ]
+    },
+    {
+      "id": "code-06",
+      "action": "code.work",
+      "project": "resume_or_next",
+      "work_minutes": 55,
+      "idle_minutes": 6,
+      "before": [
+        "ensure_open",
+        "focus"
+      ],
+      "after": [
+        "save"
+      ]
+    },
+    {
+      "id": "browse-06",
+      "action": "browser.browse",
+      "source": "profile_catalog",
+      "work_minutes": 15,
+      "idle_minutes": 2,
+      "before": [
+        "ensure_open",
+        "focus"
+      ]
+    },
+    {
+      "id": "calculator-01",
+      "action": "calculator.do_calculations",
+      "work_minutes": 10,
+      "idle_minutes": 0,
+      "before": [
+        "ensure_open",
+        "focus"
+      ],
+      "after": [
+        "close"
+      ]
+    },
+    {
+      "id": "code-07",
+      "action": "code.work",
+      "project": "resume_or_next",
+      "work_minutes": 55,
+      "idle_minutes": 6,
+      "before": [
+        "ensure_open",
+        "focus"
+      ],
+      "after": [
+        "save"
+      ]
+    },
+    {
+      "id": "browse-07",
+      "action": "browser.browse",
+      "source": "profile_catalog",
+      "work_minutes": 15,
+      "idle_minutes": 2,
+      "before": [
+        "ensure_open",
+        "focus"
+      ]
+    },
+    {
+      "id": "code-08",
+      "action": "code.work",
+      "project": "resume_or_next",
+      "work_minutes": 47,
+      "idle_minutes": 5,
+      "before": [
+        "ensure_open",
+        "focus"
+      ],
+      "after": [
+        "save"
+      ]
+    },
+    {
+      "id": "browse-08",
+      "action": "browser.browse",
+      "source": "profile_catalog",
+      "work_minutes": 15,
+      "idle_minutes": 2,
+      "before": [
+        "ensure_open",
+        "focus"
+      ]
+    },
+    {
+      "id": "focus-code",
+      "action": "app.focus",
+      "app": "vscode"
+    },
+    {
+      "id": "save-code",
+      "action": "app.save",
+      "app": "vscode"
+    },
+    {
+      "id": "close-browser",
+      "action": "app.close",
+      "app": "browser"
+    }
+  ]
+}

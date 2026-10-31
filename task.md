@@ -1,6 +1,6 @@
 # Accessibility automation work plan
 
-Updated: 2026-10-31
+Updated: 2026-11-01
 
 This backlog combines all six reference photos: three original notebook pages
 and three newer planning images. Repeated items are merged by capability.
@@ -9,20 +9,21 @@ they do not imply that the capability is absent from every existing prototype.
 Unclear or conflicting details are collected under **Unconfirmed reference notes**.
 Source IDs below refer to the linked photos at the end of this file.
 
-The [root README](README.md) now describes a proposed ordered JSON action flow.
-This backlog records the earlier profile-driven plan and current implementation;
-its scheduling tasks need review before work on the new flow begins.
+The [root README](README.md) describes the first implemented ordered JSON action
+flow. This backlog records the earlier profile-driven plan and remaining ideas;
+its scheduling tasks have not yet been rewritten around the flow runner.
 
 The active project is a personal, single-session accessibility automation and AI
 helper learning environment: reference typing, application navigation, window
-layout, browser exploration, and result verification. The implemented player is
-scripted and profile driven in C; Python experiments test targeting concepts.
+layout, browser exploration, and result verification. The C player now accepts
+an ordered flow as well as its older profile modes; Python experiments test
+targeting concepts.
 
 ## Existing starting point
 
 | Component | Current starting point | Remaining distinction |
 |---|---|---|
-| Native player | C desktop-folder, typing, browser, and saved-file verification workflows. | Integrate the combined scenario configuration and additional activities. |
+| Native player | C desktop-folder, typing, browser, saved-file verification, and [JSON flows](TutorialAutomation/README.md#json-work-flows). | Live flow acceptance and additional actions, including Excel, remain. |
 | Taskbar targeting | [Python prototype](experiments/taskbar-pointer-demo/README.md) locates app buttons and shows the desktop. | Reuse targeting concepts in the integrated workflow. |
 | Browser exploration | [Python prototype](experiments/browser-explorer/README.md) discovers accessible controls, observes click outcomes, and varies movement, scrolling, and pauses. | Add the planned tab, bookmark, and scenario-selection behavior. |
 | Split-window demo | [Separate sample](experiments/split-coding-browser/README.md) opens the desktop project in VS Code, types for one minute, browses for one minute, and returns to the editor. | Generalize its timing and layout for scheduled main/side tasks. |
@@ -32,12 +33,12 @@ scripted and profile driven in C; Python experiments test targeting concepts.
 ## Current session scope
 
 The active implementation runs `tutorial.exe` in one interactive Windows session.
-The optional `monitor.exe` reports status, alerts, and screenshots for that session
-and accepts commands from its configured Telegram chat. The combined session uses
-an entered `--duration-minutes` as its stop clock; otherwise it follows the
-L3 daily target and switches to a local remaining-time countdown if the
-recorder fails. Accessibility, foreground guards, and saved-output checks remain
-part of the current workflow.
+The optional `monitor.exe` reports status, alerts, and screenshots and accepts
+commands from its configured Telegram chat. `--flow FILE` follows explicit
+steps and ends after the last one; L3 runs only when the flow lists it. The older
+`--session` mode uses an entered `--duration-minutes` as its stop clock or an
+L3 daily target with a local fallback. Accessibility, foreground guards, and
+saved-output checks remain part of playback.
 
 ## Scenario profiles and shared playback settings
 
@@ -69,9 +70,10 @@ Sources: O2, O3, N1, N2, N3.
 
 Sources: N1, N3.
 
-The implemented sequence attempts optional recording, starts an initial main or
-side task, alternates coding and browsing, and ends at the selected time limit.
-Remaining proposals below cover broader scheduling and activity choices.
+The older `--session` sequence attempts recording, alternates coding and
+browsing, and ends at a selected time limit. The JSON flow follows its listed
+actions in order, with no automatic recording. Remaining proposals below cover
+broader scheduling and activity choices.
 
 - [ ] Define main-task, side-task, and idle/pause budgets, including how elapsed
   time is counted and how an activity yields or resumes.

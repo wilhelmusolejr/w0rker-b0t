@@ -95,7 +95,15 @@ int playback_guard(Playback *p) {
 
 int playback_yield(const Playback *p) {
     return InterlockedCompareExchange((volatile LONG *)&p->wind_down, 0, 0) ||
-        InterlockedCompareExchange((volatile LONG *)&p->yield, 0, 0) || (p->deadline && GetTickCount64() >= p->deadline);
+        InterlockedCompareExchange((volatile LONG *)&p->yield, 0, 0) ||
+        (p->deadline && GetTickCount64() - p->paused_ms >= p->deadline);
+}
+void playback_deadline_after(Playback *p, ULONGLONG milliseconds) {
+    p->deadline = GetTickCount64() - p->paused_ms + milliseconds;
+}
+ULONGLONG playback_deadline_remaining(const Playback *p) {
+    ULONGLONG now = GetTickCount64() - p->paused_ms;
+    return p->deadline > now ? p->deadline - now : 0;
 }
 /* The session's periodic check, only between inputs: never while a key or button is held. */
 static void run_watch(Playback *p) {
@@ -270,6 +278,7 @@ static int execute(Playback *p, const Command *c) {
         case CMD_SIDE_APP: return p->side_app_job && side_apps_job(p, p->side_app_job);
         case CMD_LOGGY3: return p->loggy_job && loggy_job(p, p->loggy_job);
         case CMD_WORK_SESSION: return p->work_session && work_session_run(p, p->work_session);
+        case CMD_FLOW: return p->flow_job && flow_run(p, p->flow_job);
         case CMD_ACTION_PACE:
             if (c->n[0] < 0) p->action_pace.enabled = 0;
             else {
@@ -329,7 +338,8 @@ int playback_run(Playback *p, const Script *script, DWORD countdown_ms) {
                 remaining -= step;
             }
         }
-        p->user_quiet_ms = p->work_session && !p->work_session->config->pause_on_user_input ? 0 : 20000;
+        p->user_quiet_ms = p->flow_job || (p->work_session && p->work_session->config &&
+            !p->work_session->config->pause_on_user_input) ? 0 : 20000;
         playback_log(p, "manual input: %s", p->user_quiet_ms ?
             "pause until idle for 20 seconds" : "keep working (automatic input pause disabled)");
     }

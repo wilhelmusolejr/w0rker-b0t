@@ -480,13 +480,12 @@ static int visit(Session *x, DWORD budget_ms, const BrowseOpener *side, int want
 
 /* ---------- session and recovery ---------- */
 
-/* A Chrome window left open earlier (by an earlier browsing slot, say), if any. */
-static BOOL CALLBACK find_chrome(HWND w, LPARAM parameter) {
+/* A browser window left open earlier (by an earlier browsing slot, say), if any. */
+static BOOL CALLBACK find_browser(HWND w, LPARAM parameter) {
     wchar_t cls[64], title[256];
-    size_t length;
     if (!IsWindowVisible(w) || GetWindow(w, GW_OWNER) || !GetClassNameW(w, cls, 64) || wcscmp(cls, L"Chrome_WidgetWin_1") ||
-        !GetWindowTextW(w, title, 256) || (length = wcslen(title)) < 13 || wcscmp(title + length - 13, L"Google Chrome") ||
-        !window_process_is(w, L"chrome.exe")) return TRUE;
+        !GetWindowTextW(w, title, 256) ||
+        (!window_process_is(w, L"chrome.exe") && !window_process_is(w, L"msedge.exe"))) return TRUE;
     *(HWND *)parameter = w;
     return FALSE;
 }
@@ -500,11 +499,12 @@ static int start_tab(Session *x, const BrowseOpener *o) {
         /* Until the browser opens, the guarded target is whatever has focus now. */
         window_fix_target(p);
         if (!p->target) { playback_log(p, "no window has focus; click the console window and start again"); return 0; }
-        if (x->s->via_taskbar) EnumWindows(find_chrome, (LPARAM)&open);
-        if (open && taskbar_show_window(p, &x->rng, L"Google Chrome", open)) {
+        if (x->s->via_taskbar) EnumWindows(find_browser, (LPARAM)&open);
+        if (open && taskbar_show_window(p, &x->rng,
+                window_process_is(open, L"chrome.exe") ? L"Google Chrome" : L"Microsoft Edge", open)) {
             /* Back to the browser that is still open: a new tab there, like a person would. */
             x->window = open;
-            playback_log(p, "Chrome is already open; opening a new tab (Ctrl+T)");
+            playback_log(p, "browser is already open; opening a new tab (Ctrl+T)");
             if (!shortcut(p, VK_CONTROL, L'T') || !playback_wait(p, motion_between(&x->rng, 600, 1200))) return 0;
             x->tabs_open = 1;
         } else {
@@ -514,6 +514,7 @@ static int start_tab(Session *x, const BrowseOpener *o) {
             x->tabs_open = 1;
         }
     } else {
+        if (!window_activate_handle(p, x->window)) return 0;
         playback_log(p, "opening a new tab (Ctrl+T)");
         if (!shortcut(p, VK_CONTROL, L'T') || !playback_wait(p, motion_between(&x->rng, 600, 1200))) return 0;
         ++x->tabs_open;
@@ -595,6 +596,7 @@ int browser_session_run(Playback *p, const BrowseSession *s) {
     if (!x || !(x->page = calloc(1, sizeof(*x->page)))) { free(x); playback_log(p, "out of memory"); return 0; }
     p->typing_speed = s->profile->typing_speed;
     x->p = p; x->s = s;
+    x->window = s->window;
     browser_session_plan(s, &plan);
     browser_session_print_plan(s, &plan);
     motion_seed(&x->rng, s->seed * 2654435761u + 1);

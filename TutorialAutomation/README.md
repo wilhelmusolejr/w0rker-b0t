@@ -3,12 +3,12 @@
 A native C11/Win32 player for scripted teaching demonstrations and desktop UI interaction tests. Scripts drive an active, unlocked Windows desktop using `SendInput` and cursor APIs. All script syntax and external text files are checked before playback. Configurable timing ranges and seeds control presentation pacing and scrolling; application and network timing can still vary.
 
 This is a personal learning project for an accessibility automation and AI helper.
-The active workflows use one interactive Windows session at a time. The optional
-Telegram monitor controls that session. The combined coding and browsing session
-uses either a local duration or a daily recording target; L3 failure does not
-stop desktop work. The combined run still needs live acceptance testing.
+The ordered JSON flow is the configurable entry point for choosing app and task
+actions. The active workflows use one interactive Windows session at a time; the
+optional Telegram monitor controls playback. The older combined coding and
+browsing session has its own local-duration or daily-recording clock.
 
-See the [project overview](../README.md) for the component map and the distinction between the native player, Python experiments, and proposed integration work.
+See the [project overview](../README.md) for a quick flow example and the other repository components.
 
 **More docs:** [CLASS_DEMO.md](CLASS_DEMO.md) (short classroom run) · [TELEGRAM.md](TELEGRAM.md) (remote pause/resume/screenshot/start) · [CHANGELOG.md](CHANGELOG.md) (recent changes)
 
@@ -30,7 +30,7 @@ What it does, in order:
 
 Settings are in [profiles/programming.json](profiles/programming.json). **Resume and project history:** each profile has a history file in `profiles/progress/<local_id>.json` (kept out of git) listing its projects, their folders, and every file it created, typed, or copied. Run the same command again after any stop: it continues the unfinished project, re-checks every saved file, and resumes a partly typed file from its saved text. It never overwrites a file it did not create; such files are reported as conflicts before any input is sent. When a project is complete, the next run starts the next project in this profile's order that it has not finished.
 
-Each profile has two independent 1–10 controls in [profiles/profiles.json](profiles/profiles.json): `typing_speed` and `mistype_level`. Speed 5 targets about 52 words per minute during continuous text entry (five characters per word), based on [a large keyboard transcription study](https://userinterfaces.aalto.fi/136Mkeystrokes/resources/chi-18-analysis.pdf); each step changes the target by 6 WPM. Both shipped profiles use speed 4 (about 46 WPM). The setting scales text entry in the profile-driven C player modes (`--session`, `--code`, `--browse`, `--apps`, and `--loggy3`) across coding, browsing, folder and command names, and side apps. Newline and deliberate presentation pauses still make observed task speed lower. The older `--config` demos and separate PowerShell Excel playback use their own settings.
+Each profile has two independent 1–10 controls in [profiles/profiles.json](profiles/profiles.json): `typing_speed` and `mistype_level`. Speed 5 targets about 52 words per minute during continuous text entry (five characters per word), based on [a large keyboard transcription study](https://userinterfaces.aalto.fi/136Mkeystrokes/resources/chi-18-analysis.pdf); each step changes the target by 6 WPM. Both shipped profiles use speed 4 (about 46 WPM). The setting scales text entry in the profile-driven C player modes (`--flow`, `--session`, `--code`, `--browse`, `--apps`, and `--loggy3`) across coding, browsing, folder and command names, and side apps. Newline and deliberate presentation pauses still make observed task speed lower. The older `--config` demos and separate PowerShell Excel playback use their own settings.
 
 `mistype_level` 5 means an ordinary amount of visible corrections; it does not mean 50% of letters are wrong. The implementation maps level 1–10 to a 2–20% chance that an eligible letter is first typed as a neighbouring key and immediately corrected (level 5: 10%). This is an approximation chosen to produce roughly the [6.3% correction-key frequency observed in the study](https://userinterfaces.aalto.fi/136Mkeystrokes/resources/chi-18-analysis.pdf) for text with about 70% eligible letters. The final saved text is still checked against the reference. `mistype_level` is the only mistake setting in each profile.
 
@@ -58,6 +58,59 @@ During `--code` and `--browse`, every 8-15 minutes of the main task (`check_ever
 **Start menu:** the mouse clicks the Start button on the taskbar; about half the time it clicks the app's pinned tile when there is one, otherwise it types the name into the Start search and clicks the result (Enter when several results match). Win+R is only a fallback when the Start menu does not respond.
 
 When the break ends, the app is closed with Alt+F4, or minimized and left open `leave_open_percent` (20%) of the time. If a step fails (a window that does not open, a control that moved), the app is closed and the main task continues; F9, F12, Ctrl+C, and Telegram `/stop` still stop everything. Try one app on its own with `tutorial.exe --apps 1 --app notepad --minutes 2`.
+
+## JSON work flows
+
+The flow runner follows an explicit list of actions in JSON. It finishes after the last step. Loggy3 is only touched when the list contains a `loggy3.*` action. The older `--session`, `--browse`, and `--code` modes remain available with their own settings.
+
+| Example | What it does | Checkpoint |
+|---|---|---|
+| [browse-10m-flow.json](scripts/browse-10m-flow.json) | Open or focus the browser, browse for 10 active minutes, leave it open. No Loggy3 or side-app action. | Off, so each run starts again. |
+| [workday-flow.json](scripts/workday-flow.json) | 22 ordered steps: 427 minutes coding, 120 browsing, 20 other apps, 58 idle, and 5 estimated transition minutes (630 planned). | On, so completed steps resume. |
+
+Build the player as described in [Build](#build). From `TutorialAutomation/build`, validate, preview, then run the short example:
+
+```powershell
+.\tutorial.exe --validate-flow ..\scripts\browse-10m-flow.json
+.\tutorial.exe --dry-run-flow ..\scripts\browse-10m-flow.json
+.\tutorial.exe --flow ..\scripts\browse-10m-flow.json
+```
+
+`--validate-flow` checks the JSON and arithmetic. `--dry-run-flow` also checks the selected profile and prints each step, its before/after actions, and the time totals without sending input or writing progress. `--flow` starts a 10-second countdown by default and then needs an unlocked interactive Windows desktop. F8 or Telegram `/pause` suspends timed work; F9/F12 or Ctrl+C stops playback. `--countdown 0` skips the countdown.
+
+### JSON structure
+
+The short example's main step is:
+
+```json
+{
+  "id": "browse-for-10-minutes",
+  "action": "browser.browse",
+  "source": "profile_catalog",
+  "work_minutes": 10,
+  "idle_minutes": 0,
+  "before": ["ensure_open", "focus"]
+}
+```
+
+`version` is `1`, `workflow_id` identifies the flow, and `profile_id` selects a profile from `profiles/profiles.json`. `execution.mode` is `sequential`; `execution.finish_when` is `last_step_completes`. Set `checkpoint_after_each_step` to `true` to resume completed steps, or `false` to start from step one on every run. Every step needs a unique `id` and a supported `action`.
+
+`time_plan.expected_total_minutes` must equal the sum of every step's `work_minutes` and `idle_minutes` plus `estimated_transitions_minutes`. The transition number is an estimate for review: the runner does not wait for it and does not stop at `expected_total_minutes`. Browser launch, page load, saves, and safe-point completion can make actual elapsed time longer. `idle_minutes_each` sets the length of each planned idle and `idle_placement` is `between_safe_points`; both fields are required even when `idle_minutes` is zero. To change this example to 15 minutes, set both `work_minutes` and `expected_total_minutes` to `15`. To browse as profile 2, change `profile_id` to `2`.
+
+| Action | Fields and behavior |
+|---|---|
+| `app.ensure_open`, `app.focus`, `app.close` | Require `app`: `vscode`, `browser`, `notepad`, or `calculator`. Open/focus can reuse an existing window. Close shuts a matching window, including an existing one if it was reused. |
+| `app.save` | Requires `app: "vscode"` or `"notepad"`. Notepad must already have a filename. |
+| `browser.browse` | Requires `source: "profile_catalog"`, `work_minutes`, and `idle_minutes`. Uses `profiles/browsing.json`; the short example leaves the browser open. Add an explicit `app.close` step if closing that window is desired. |
+| `code.work` | Requires `project: "resume_or_next"`, `work_minutes`, and `idle_minutes`. Uses the profile's current or next pinned reference project. |
+| `notepad.write_notes`, `calculator.do_calculations` | Require `work_minutes` and `idle_minutes: 0`. They open/focus and close their own windows; Notepad saves its note. |
+| `loggy3.status`, `loggy3.show`, `loggy3.minimize`, `loggy3.close`, `loggy3.record`, `loggy3.stop` | Optional recorder actions. They run only when listed; Loggy3 never controls the flow clock. |
+
+Timed steps can use `before: ["ensure_open", "focus"]` and `after: ["save", "close"]` where those operations apply; list them in that order. Coding and browsing idle minutes occur at safe points; any remaining idle runs after that step's work. A flow does not schedule extra side-app breaks or Loggy3 actions. The browser task still chooses sites, tabs, and reading actions from its catalog.
+
+For a coding flow, prepare reference projects with `tutorial.exe --fetch-projects`. The player reads only the configs needed by listed actions: `profiles.json` for every flow; `programming.json` and `projects.json` for coding; `browsing.json` for browsing; `apps.json` for notes or calculations. Override them with `--profiles`, `--programming`, `--browsing`, and `--apps-config`. `--seed` makes the task choices repeatable; `--log FILE` selects the execution log.
+
+When checkpointing is on, successful steps are saved under `profiles/progress/flow-<workflow_id>-<profile_id>.json`, or at `--progress FILE`. Repeating `--flow` resumes at the first unfinished step. Use `--restart-flow` after completion or after editing the JSON to start the step list again; coding project history still resumes its own files. The 10h30m example has passed validation and dry run, but has not had an end-to-end live desktop acceptance run.
 
 ## Combined work session
 
